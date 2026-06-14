@@ -8,103 +8,15 @@ import {
   StatusBar,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Buffer } from "buffer";
 import MaterialCommunityIcons from "react-native-vector-icons/MaterialCommunityIcons";
 import styles from "./styles";
 import { useNavigation } from "@react-navigation/native";
 import {
   AppNavigationProp,
-  BluetoothDevice,
   useBluetoothStore,
-  NUS_SERVICE,
-  NUS_RX,
-  NUS_TX,
+  connect,
+  isSupported,
 } from "../constants";
-
-// Tarayıcının Web Bluetooth (GATT) cihazını Android'deki BluetoothDevice
-// yüzeyine saran adapter. Böylece diğer ekranlar (Communication, CarControl)
-// cihazı android ile bire bir aynı şekilde (write/disconnect/onDataReceived)
-// kullanır. Veri akışı base64'tür: write düz metni RX'e yazar, onDataReceived
-// ise TX bildirimlerini base64 olarak iletir (android ile aynı davranış).
-const createBleDevice = (
-  bleDevice: any, // BluetoothDevice (Web Bluetooth)
-  server: any, // BluetoothRemoteGATTServer
-  rx: any, // RX karakteristiği (write)
-  tx: any // TX karakteristiği (notify)
-): BluetoothDevice => {
-  const listeners = new Set<(event: { data: string }) => void>();
-
-  // Web Bluetooth aynı anda yalnızca TEK bir GATT işlemine izin verir; eşzamanlı
-  // çağrılar "GATT operation already in progress" hatası verir. Bu yüzden tüm GATT
-  // işlemlerini (write / start-stopNotifications) tek bir kuyrukta seri çalıştırıyoruz.
-  let gattQueue: Promise<unknown> = Promise.resolve();
-  const enqueueGatt = <T,>(op: () => Promise<T>): Promise<T> => {
-    // Önceki işlem başarısız olsa da kuyruk devam etsin diye iki dalda da op'u çalıştır.
-    const run = gattQueue.then(op, op);
-    gattQueue = run.then(
-      () => undefined,
-      () => undefined
-    );
-    return run;
-  };
-
-  const handleNotify = (event: any) => {
-    const value: DataView = event.target.value;
-    if (!value) return;
-    const bytes = new Uint8Array(value.buffer);
-    const data = Buffer.from(bytes).toString("base64");
-    listeners.forEach((cb) => cb({ data }));
-  };
-  tx.addEventListener("characteristicvaluechanged", handleNotify);
-  enqueueGatt(() => tx.startNotifications()).catch(() => {});
-
-  const handleDisconnect = () => {
-    const { manuallyDisconnected, setConnectedDevice, setManuallyDisconnected } =
-      useBluetoothStore.getState();
-    setConnectedDevice(null);
-    if (!manuallyDisconnected) {
-      window.alert(
-        "Bağlantı Koptu ⚠️\nCihazın gücü kesildi veya menzilden çıkıldı."
-      );
-    }
-    setManuallyDisconnected(false);
-  };
-  bleDevice.addEventListener("gattserverdisconnected", handleDisconnect);
-
-  return {
-    name: bleDevice.name || "BLE Cihazı",
-    write: (data: string) => {
-      const bytes = new TextEncoder().encode(data);
-      // Hızlı komut akışında kuyruk hızlı boşalsın diye (varsa) yanıtsız yazma
-      // kullanılır; her durumda kuyruk üzerinden seri çalışır.
-      return enqueueGatt(() =>
-        rx.writeValueWithoutResponse
-          ? rx.writeValueWithoutResponse(bytes)
-          : rx.writeValue(bytes)
-      );
-    },
-    onDataReceived: (listener) => {
-      listeners.add(listener);
-      return {
-        remove: () => {
-          listeners.delete(listener);
-        },
-      };
-    },
-    disconnect: async () => {
-      bleDevice.removeEventListener("gattserverdisconnected", handleDisconnect);
-      try {
-        tx.removeEventListener("characteristicvaluechanged", handleNotify);
-      } catch (e) {}
-      try {
-        await enqueueGatt(() => tx.stopNotifications());
-      } catch (e) {}
-      try {
-        if (server.connected) server.disconnect();
-      } catch (e) {}
-    },
-  };
-};
 
 export default function BluetoothConnectionScreen() {
 
@@ -118,7 +30,7 @@ export default function BluetoothConnectionScreen() {
   const [isConnecting, setIsConnecting] = useState(false);
 
   useEffect(() => {
-    if (typeof navigator !== "undefined" && !("bluetooth" in navigator)) {
+    if (!isSupported()) {
       window.alert(
         "Hata: Tarayıcınız Web Bluetooth API desteklemiyor. Chrome veya Edge kullanın."
       );
@@ -126,27 +38,13 @@ export default function BluetoothConnectionScreen() {
   }, []);
 
   const selectAndConnect = async () => {
-    if (typeof navigator === "undefined" || !("bluetooth" in navigator)) return;
-
-    let bleDevice: any;
-    try {
-      bleDevice = await (navigator as any).bluetooth.requestDevice({
-        filters: [{ services: [NUS_SERVICE] }],
-        optionalServices: [NUS_SERVICE],
-      });
-    } catch (error) {
-      return; // kullanıcı cihaz seçim penceresini iptal etti
-    }
+    if (!isSupported()) return;
 
     try {
       setIsConnecting(true);
 
-      const server = await bleDevice.gatt.connect();
-      const service = await server.getPrimaryService(NUS_SERVICE);
-      const rx = await service.getCharacteristic(NUS_RX);
-      const tx = await service.getCharacteristic(NUS_TX);
-
-      const device = createBleDevice(bleDevice, server, rx, tx);
+      const device = await connect();
+      if (!device) return; // kullanıcı cihaz seçimini iptal etti
 
       setManuallyDisconnected(false);
       setConnectedDevice(device);

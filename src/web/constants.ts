@@ -14,26 +14,29 @@ export type RootStackParamList = {
 export type AppNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 // ----------------------------------------------------------------------------
-// Nordic UART Service (NUS) — BLE üzerinden seri haberleşme (UART köprüsü).
+// Nordic UART Service (NUS) — GATT üzerinden seri haberleşme (UART köprüsü).
 // RX: client -> cihaz (write), TX: cihaz -> client (notify).
 // ----------------------------------------------------------------------------
 export const NUS_SERVICE = "8c17a100-2b31-4f52-9a68-7b126a090001";
 export const NUS_RX = "8c17a100-2b31-4f52-9a68-7b126a090002"; // write (client -> device)
 export const NUS_TX = "8c17a100-2b31-4f52-9a68-7b126a090003"; // notify (device -> client)
 
-// Web'de "bluetooth cihazı" tarayıcının Web Bluetooth (GATT) cihazıdır.
-// Android'deki react-native-ble-plx cihazıyla aynı yüzeyi (name/write/
-// disconnect/onDataReceived) sunar ki diğer ekranların kodu aynı kalabilsin.
+// ----------------------------------------------------------------------------
+// Taşımadan bağımsız Bluetooth yüzeyi + durum. Gerçek implementasyon (Web
+// Bluetooth) tek dosyada: ./BTControlLib. Ekranlar yalnızca bu yüzeyi konuşur.
+// ----------------------------------------------------------------------------
+export type Subscription = { remove: () => void };
+
 export type BluetoothDevice = {
   name: string;
   write: (data: string) => Promise<void>;
   disconnect: () => Promise<void>;
   onDataReceived: (
     listener: (event: { data: string }) => void
-  ) => { remove: () => void };
+  ) => Subscription;
 };
 
-interface Message {
+export interface Message {
   id: number;
   text: string;
   mode: "sent" | "received";
@@ -53,9 +56,10 @@ export const useBluetoothStore = create<BluetoothStore>((set) => ({
   connectedDevice: null,
   setConnectedDevice: (device) => set({ connectedDevice: device }),
   messages: [],
-  setMessages: (messages: Message[]) => set({ messages }),
+  setMessages: (messages) => set({ messages }),
   manuallyDisconnected: false,
-  setManuallyDisconnected: (manuallyDisconnected: boolean) => set({ manuallyDisconnected }),
+  setManuallyDisconnected: (manuallyDisconnected) =>
+    set({ manuallyDisconnected }),
 }));
 
 // ----------------------------------------------------------------------------
@@ -188,3 +192,10 @@ export const useSettingsStore = create<SettingsStore>()(
     }
   )
 );
+
+// ----------------------------------------------------------------------------
+// Bluetooth implementasyonu (Web Bluetooth) tek dosyada toplanmıştır:
+// ./BTControlLib. Ekranlar fonksiyonları (connect, isSupported) eskisi gibi
+// "../constants" üzerinden alır.
+// ----------------------------------------------------------------------------
+export * from "./BTControlLib";
