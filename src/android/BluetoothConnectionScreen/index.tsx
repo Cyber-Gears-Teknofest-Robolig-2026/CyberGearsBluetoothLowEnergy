@@ -35,7 +35,7 @@ import {
   startScan as bleStartScan,
   stopScan as bleStopScan,
   connect,
-} from "../../BTControlLib";
+} from "../BTControlLib";
 
 export default function BluetoothConnectionScreen() {
 

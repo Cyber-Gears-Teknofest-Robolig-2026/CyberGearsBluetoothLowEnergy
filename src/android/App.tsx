@@ -24,7 +24,7 @@ import {
   useBluetoothStore,
   useSettingsStore,
 } from "./constants";
-import { onAdapterPoweredOff, onDeviceDisconnected } from "../BTControlLib";
+import { onAdapterPoweredOff, onDeviceDisconnected } from "./BTControlLib";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
