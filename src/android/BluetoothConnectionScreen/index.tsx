@@ -28,12 +28,14 @@ import {
   AppNavigationProp,
   useBluetoothStore,
   ScannedDevice,
+} from "../constants";
+import {
   requestPermissions,
   ensureEnabled,
   startScan as bleStartScan,
   stopScan as bleStopScan,
   connect,
-} from "../constants";
+} from "../../BTControlLib";
 
 export default function BluetoothConnectionScreen() {
 

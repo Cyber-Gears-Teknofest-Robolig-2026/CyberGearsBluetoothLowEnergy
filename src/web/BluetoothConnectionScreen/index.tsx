@@ -15,9 +15,8 @@ import {
   AppNavigationProp,
   useBluetoothStore,
   BluetoothDevice,
-  connect,
-  isSupported,
 } from "../constants";
+import { connect, isSupported } from "../../BTControlLib";
 
 const BAUD_RATE = 9600;
 

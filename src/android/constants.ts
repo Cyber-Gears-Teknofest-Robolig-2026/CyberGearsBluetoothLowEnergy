@@ -3,6 +3,10 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+export const NUS_SERVICE = "8C17A100-2B31-4F52-9A68-7B126A090001"
+export const NUS_RX = "8C17A100-2B31-4F52-9A68-7B126A090002"
+export const NUS_TX = "8C17A100-2B31-4F52-9A68-7B126A090003"
+
 export type RootStackParamList = {
   Home: undefined;
   BluetoothConnection: undefined;
@@ -14,18 +18,18 @@ export type RootStackParamList = {
 export type AppNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 // ----------------------------------------------------------------------------
-// Nordic UART Service (NUS) — BLE üzerinden seri haberleşme (UART köprüsü).
-// RX: client -> cihaz (write), TX: cihaz -> client (notify).
+// Bluetooth Low Energy (RFCOMM / SPP) — seri haberleşme. UUID/servis gerekmez;
+// satır temelli ('\n') düz metin çerçeveleme kullanılır (bkz. ./BTControlLib).
 // ----------------------------------------------------------------------------
-export const NUS_SERVICE = "8c17a100-2b31-4f52-9a68-7b126a090001";
-export const NUS_RX = "8c17a100-2b31-4f52-9a68-7b126a090002"; // write (client -> device)
-export const NUS_TX = "8c17a100-2b31-4f52-9a68-7b126a090003"; // notify (device -> client)
 
 // ----------------------------------------------------------------------------
-// Taşımadan bağımsız Bluetooth yüzeyi + durum. Gerçek implementasyon (ble-plx)
-// tek dosyada: ./BTControlLib. Ekranlar yalnızca bu yüzeyi konuşur.
+// Taşımadan bağımsız Bluetooth yüzeyi (tipler) + durum (store). Taşıma katmanı
+// (./BTControlLib) bu tipleri buradan import eder; ekranlar da. constants ise
+// BTControlLib'i import ETMEZ (re-export yok). Böylece iki dosya birbirini import
+// etmez ve require döngüsü oluşmaz. Ekranlar taşıma fonksiyonlarını (connect,
+// startScan, ...) doğrudan "../BTControlLib"ten alır.
 // ----------------------------------------------------------------------------
-export type ScannedDevice = { id: string; name: string };
+export type ScannedDevice = { id: string; name: string; bonded?: boolean };
 
 export type Subscription = { remove: () => void };
 
@@ -198,8 +202,9 @@ export const useSettingsStore = create<SettingsStore>()(
 );
 
 // ----------------------------------------------------------------------------
-// Bluetooth implementasyonu (ble-plx) tek dosyada toplanmıştır: ./BTControlLib.
-// Ekranlar fonksiyonları (connect, startScan, ...) eskisi gibi "../constants"
-// üzerinden alır. Başka bir Bluetooth çeşidine geçerken yalnızca o dosya değişir.
+// Bluetooth implementasyonu (Classic / react-native-bluetooth-classic) ayrı
+// dosyadadır: ./BTControlLib. constants onu import ETMEZ; ekranlar taşıma
+// fonksiyonlarını (connect, startScan, ...) doğrudan oradan alır. Böylece
+// constants <-> BTControlLib karşılıklı importu (ve require döngüsü) olmaz. Başka
+// bir Bluetooth çeşidine geçerken yalnızca o dosya değişir.
 // ----------------------------------------------------------------------------
-export * from "./BTControlLib";
