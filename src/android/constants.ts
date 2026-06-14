@@ -182,7 +182,7 @@ export const defaultSettings: AppSettings = {
     },
   },
   allSendsValues: {
-    motors: false,
+    motors: true,
     robot_arms: false,
     ziplines: true,
   },

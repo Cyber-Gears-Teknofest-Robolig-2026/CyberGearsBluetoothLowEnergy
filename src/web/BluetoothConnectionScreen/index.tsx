@@ -34,6 +34,20 @@ const createBleDevice = (
 ): BluetoothDevice => {
   const listeners = new Set<(event: { data: string }) => void>();
 
+  // Web Bluetooth aynı anda yalnızca TEK bir GATT işlemine izin verir; eşzamanlı
+  // çağrılar "GATT operation already in progress" hatası verir. Bu yüzden tüm GATT
+  // işlemlerini (write / start-stopNotifications) tek bir kuyrukta seri çalıştırıyoruz.
+  let gattQueue: Promise<unknown> = Promise.resolve();
+  const enqueueGatt = <T,>(op: () => Promise<T>): Promise<T> => {
+    // Önceki işlem başarısız olsa da kuyruk devam etsin diye iki dalda da op'u çalıştır.
+    const run = gattQueue.then(op, op);
+    gattQueue = run.then(
+      () => undefined,
+      () => undefined
+    );
+    return run;
+  };
+
   const handleNotify = (event: any) => {
     const value: DataView = event.target.value;
     if (!value) return;
@@ -42,7 +56,7 @@ const createBleDevice = (
     listeners.forEach((cb) => cb({ data }));
   };
   tx.addEventListener("characteristicvaluechanged", handleNotify);
-  tx.startNotifications().catch(() => {});
+  enqueueGatt(() => tx.startNotifications()).catch(() => {});
 
   const handleDisconnect = () => {
     const { manuallyDisconnected, setConnectedDevice, setManuallyDisconnected } =
@@ -59,10 +73,15 @@ const createBleDevice = (
 
   return {
     name: bleDevice.name || "BLE Cihazı",
-    write: async (data: string) => {
+    write: (data: string) => {
       const bytes = new TextEncoder().encode(data);
-      if (rx.writeValueWithResponse) await rx.writeValueWithResponse(bytes);
-      else await rx.writeValue(bytes);
+      // Hızlı komut akışında kuyruk hızlı boşalsın diye (varsa) yanıtsız yazma
+      // kullanılır; her durumda kuyruk üzerinden seri çalışır.
+      return enqueueGatt(() =>
+        rx.writeValueWithoutResponse
+          ? rx.writeValueWithoutResponse(bytes)
+          : rx.writeValue(bytes)
+      );
     },
     onDataReceived: (listener) => {
       listeners.add(listener);
@@ -78,7 +97,7 @@ const createBleDevice = (
         tx.removeEventListener("characteristicvaluechanged", handleNotify);
       } catch (e) {}
       try {
-        await tx.stopNotifications();
+        await enqueueGatt(() => tx.stopNotifications());
       } catch (e) {}
       try {
         if (server.connected) server.disconnect();

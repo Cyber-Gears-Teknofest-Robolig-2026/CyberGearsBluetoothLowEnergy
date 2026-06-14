@@ -1,5 +1,5 @@
 import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   ScrollView,
@@ -330,6 +330,60 @@ export default function SettingsScreen() {
       ],
     );
   };
+
+  // --- Kaydedilmemiş değişiklik koruması ------------------------------------
+  // beforeRemove'dan sonra eylemi tekrar dispatch ederken döngüye girmemek için.
+  const allowLeaveRef = useRef(false);
+
+  // draft, kayıtlı ayarlardan farklı mı? (normalize edilmiş değerler kıyaslanır)
+  const isDirty = (): boolean => {
+    const s = useSettingsStore.getState();
+    const saved: AppSettings = {
+      sendValuesHeaders: s.sendValuesHeaders,
+      allSendsValues: s.allSendsValues,
+      motorSpeedDefault: s.motorSpeedDefault,
+      motorSpeedStepDefault: s.motorSpeedStepDefault,
+      armsAre360Default: s.armsAre360Default,
+      armValuesDefault: s.armValuesDefault,
+      armValuesStepDefault: s.armValuesStepDefault,
+      ziplineAnglesDefault: s.ziplineAnglesDefault,
+    };
+    return JSON.stringify(fromDraft(draft)) !== JSON.stringify(saved);
+  };
+
+  // Ekrandan ayrılırken (geri oku/goBack, geri hareketi, donanım geri, ev/reset)
+  // kaydedilmemiş değişiklik varsa önce kaydetmek isteyip istemediğini sor.
+  // (Araç butonu push olduğundan bu ekranı kaldırmaz; draft korunur, sorulmaz.)
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      if (allowLeaveRef.current || !isDirty()) return;
+      e.preventDefault();
+      Alert.alert(
+        'Kaydedilmemiş Değişiklikler',
+        'Yaptığınız değişiklikleri kaydetmek istiyor musunuz?',
+        [
+          { text: 'Vazgeç', style: 'cancel' },
+          {
+            text: 'Kaydetme',
+            style: 'destructive',
+            onPress: () => {
+              allowLeaveRef.current = true;
+              navigation.dispatch(e.data.action);
+            },
+          },
+          {
+            text: 'Kaydet',
+            onPress: () => {
+              setSettings(fromDraft(draft));
+              allowLeaveRef.current = true;
+              navigation.dispatch(e.data.action);
+            },
+          },
+        ],
+      );
+    });
+    return unsubscribe;
+  }, [navigation, draft]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
