@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { Entypo, MaterialIcons } from '@expo/vector-icons';
 import CustomSlider from '../../CustomComponents/CustomSlider';
+import HoldButton from '../../CustomComponents/HoldButton';
 import styles from './styles';
 import {
   useBluetoothStore,
@@ -25,7 +26,9 @@ const clamp = (value: number, min: number, max: number) => {
   return Math.max(min, Math.min(max, Math.round(value)));
 };
 
-export default function RCCarTab() {
+type Props = { disableScroll?: boolean };
+
+export default function RCCarTab({ disableScroll = false }: Props) {
 
   const connectedDevice = useBluetoothStore((state) => state.connectedDevice);
 
@@ -162,13 +165,8 @@ export default function RCCarTab() {
     handleSpeedChange(Number(speedInput));
   };
 
-  return (
-    <ScrollView
-      style={styles.screenBody}
-      contentContainerStyle={styles.vehicleScrollContent}
-      showsVerticalScrollIndicator={false}
-      onLayout={(e) => setVehicleScrollHeight(e.nativeEvent.layout.height)}
-    >
+  const content = (
+    <>
       <View
         style={[
           styles.vehicleTopRow,
@@ -310,12 +308,12 @@ export default function RCCarTab() {
         </View>
 
         <View style={styles.speedControlRow}>
-          <TouchableOpacity
+          <HoldButton
             style={styles.roundControlButton}
-            onPress={decrementSpeed}
+            onPressIn={decrementSpeed}
           >
             <Entypo name="minus" size={20} color="#FFFFFF" />
-          </TouchableOpacity>
+          </HoldButton>
 
           <View style={styles.speedSliderBox}>
             <CustomSlider
@@ -332,12 +330,12 @@ export default function RCCarTab() {
             />
           </View>
 
-          <TouchableOpacity
+          <HoldButton
             style={styles.roundControlButton}
-            onPress={incrementSpeed}
+            onPressIn={incrementSpeed}
           >
             <Entypo name="plus" size={20} color="#FFFFFF" />
-          </TouchableOpacity>
+          </HoldButton>
 
           <View style={styles.speedInputBox}>
             <TextInput
@@ -352,6 +350,25 @@ export default function RCCarTab() {
           </View>
         </View>
       </View>
+    </>
+  );
+
+  if (disableScroll) {
+    return (
+      <View style={styles.screenBody} onLayout={(e: any) => setVehicleScrollHeight(e.nativeEvent.layout.height)}>
+        {content}
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView
+      style={styles.screenBody}
+      contentContainerStyle={styles.vehicleScrollContent}
+      showsVerticalScrollIndicator={false}
+      onLayout={(e) => setVehicleScrollHeight(e.nativeEvent.layout.height)}
+    >
+      {content}
     </ScrollView>
   );
 }

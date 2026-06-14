@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { Entypo, MaterialIcons } from '@expo/vector-icons';
 import CustomSlider from '../../CustomComponents/CustomSlider';
+import HoldButton from '../../CustomComponents/HoldButton';
 import styles from './styles';
 import {
   useBluetoothStore,
@@ -39,7 +40,9 @@ const clamp = (value: number, min: number, max: number) => {
   return Math.max(min, Math.min(max, Math.round(value)));
 };
 
-export default function RobotArmTab() {
+type Props = { disableScroll?: boolean };
+
+export default function RobotArmTab({ disableScroll = false }: Props) {
 
   const connectedDevice = useBluetoothStore((state) => state.connectedDevice);
 
@@ -250,22 +253,22 @@ export default function RobotArmTab() {
             R{index}
           </Text>
 
-          <TouchableOpacity
+          <HoldButton
             style={styles.armResetButton}
             activeOpacity={0.7}
-            onPress={() => resetArm(index)}
+            onPressIn={() => resetArm(index)}
           >
             <MaterialIcons name="refresh" size={16} color="#0A84FF" />
-          </TouchableOpacity>
+          </HoldButton>
         </View>
 
-        <TouchableOpacity
+        <HoldButton
           style={[styles.armButton, styles.armButtonVerticalTop]}
           activeOpacity={0.8}
-          onPress={() => incrementArm(index)}
+          onPressIn={() => incrementArm(index)}
         >
           <Entypo name="plus" size={18} color="#FFFFFF" />
-        </TouchableOpacity>
+        </HoldButton>
 
         <View style={styles.verticalSliderBox}>
           <CustomSlider
@@ -283,13 +286,13 @@ export default function RobotArmTab() {
           />
         </View>
 
-        <TouchableOpacity
+        <HoldButton
           style={[styles.armButton, styles.armButtonVerticalBottom]}
           activeOpacity={0.8}
-          onPress={() => decrementArm(index)}
+          onPressIn={() => decrementArm(index)}
         >
           <Entypo name="minus" size={18} color="#FFFFFF" />
-        </TouchableOpacity>
+        </HoldButton>
 
         <View style={[styles.armInputBox, styles.armInputBoxVertical]}>
           <TextInput
@@ -347,7 +350,7 @@ export default function RobotArmTab() {
             */}
 
             {/* Yeni Sol Ok Butonu */}
-            <TouchableOpacity
+            <HoldButton
               style={[
                 styles.armButton,
                 styles.armButtonHorizontal,
@@ -360,7 +363,7 @@ export default function RobotArmTab() {
               onPressOut={() => handle360RotationStop(index)}
             >
               <Entypo name="arrow-left" size={18} color="#FFFFFF" />
-            </TouchableOpacity>
+            </HoldButton>
 
             {/* Yeni Hız Ayarı Slider'ı (0-90 arası) */}
             <View style={styles.armHSliderBox}>
@@ -379,7 +382,7 @@ export default function RobotArmTab() {
             </View>
 
             {/* Yeni Sağ Ok Butonu */}
-            <TouchableOpacity
+            <HoldButton
               style={[
                 styles.armButton,
                 styles.armButtonHorizontal,
@@ -392,11 +395,11 @@ export default function RobotArmTab() {
               onPressOut={() => handle360RotationStop(index)}
             >
               <Entypo name="arrow-right" size={18} color="#FFFFFF" />
-            </TouchableOpacity>
+            </HoldButton>
           </>
         ) : (
           <>
-            <TouchableOpacity
+            <HoldButton
               style={[
                 styles.armButton,
                 styles.armButtonHorizontal,
@@ -409,7 +412,7 @@ export default function RobotArmTab() {
               onPressOut={stopArmHold}
             >
               <Entypo name="minus" size={18} color="#FFFFFF" />
-            </TouchableOpacity>
+            </HoldButton>
 
             <View style={styles.armHSliderBox}>
               <CustomSlider
@@ -426,7 +429,7 @@ export default function RobotArmTab() {
               />
             </View>
 
-            <TouchableOpacity
+            <HoldButton
               style={[
                 styles.armButton,
                 styles.armButtonHorizontal,
@@ -439,7 +442,7 @@ export default function RobotArmTab() {
               onPressOut={stopArmHold}
             >
               <Entypo name="plus" size={18} color="#FFFFFF" />
-            </TouchableOpacity>
+            </HoldButton>
           </>
         )}
 
@@ -456,17 +459,17 @@ export default function RobotArmTab() {
           <Text style={styles.armInputUnit}>{is360Servo ? "" : "°"}</Text>
         </View>
 
-        <TouchableOpacity
+        <HoldButton
           style={[styles.armResetButton, styles.armButtonHorizontal]}
           activeOpacity={0.7}
-          onPress={() => resetArm(index)}
+          onPressIn={() => resetArm(index)}
         >
           <MaterialIcons
             name="refresh"
             size={22}
             color="#0A84FF"
           />
-        </TouchableOpacity>
+        </HoldButton>
       </View>
     );
   };
@@ -481,6 +484,20 @@ export default function RobotArmTab() {
     110,
   );
 
+  const content = (
+    <>
+      {[5, 4, 3, 2, 1, 0].map((i) => renderHorizontalArmCard(i, cardHeight))}
+    </>
+  );
+
+  if (disableScroll) {
+    return (
+      <View style={styles.screenBody} onLayout={(e: any) => setRobotScrollHeight(e.nativeEvent.layout.height)}>
+        {content}
+      </View>
+    );
+  }
+
   return (
     <ScrollView
       style={styles.screenBody}
@@ -488,9 +505,7 @@ export default function RobotArmTab() {
       showsVerticalScrollIndicator={false}
       onLayout={(e) => setRobotScrollHeight(e.nativeEvent.layout.height)}
     >
-      {[5, 4, 3, 2, 1, 0].map((i) =>
-        renderHorizontalArmCard(i, cardHeight),
-      )}
+      {content}
     </ScrollView>
   );
 }

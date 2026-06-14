@@ -160,7 +160,7 @@ const styles = StyleSheet.create({
     padding: 4,
     marginRight: 8,
   },
-  textInput: {
+  textInput: ({
     flex: 1,
     fontSize: 15,
     color: "#000000",
@@ -171,7 +171,7 @@ const styles = StyleSheet.create({
     outlineStyle: "none",
     boxShadow: "none",         // Remove any focus box-shadow on web browsers
     borderWidth: 0,
-  },
+  } as any),
   sendButtonDisabled: {
     backgroundColor: "#9CA3AF",
     borderRadius: 20,

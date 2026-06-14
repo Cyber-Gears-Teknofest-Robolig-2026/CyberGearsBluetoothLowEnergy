@@ -1,31 +1,21 @@
 import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
 import {
   Text,
   TouchableOpacity,
   View,
+  ScrollView,
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useNavigation } from '@react-navigation/native';
-import { TabView, SceneMap } from 'react-native-tab-view';
 import styles from './styles';
 import RCCarTab from './RCCarTab';
 import RobotArmTab from './RobotArmTab';
 import { AppNavigationProp, useBluetoothStore } from '../constants';
 
 
-const TAB_ROUTES = [
-  { key: 'car', title: 'Araç Kontrol' },
-  { key: 'arm', title: 'Robot Kol' },
-];
-
-const renderScene = SceneMap({
-  car: RCCarTab,
-  arm: RobotArmTab,
-});
 
 export default function CarControlScreen() {
 
@@ -52,7 +42,6 @@ export default function CarControlScreen() {
     }
   };
 
-  const [index, setIndex] = useState(0);
 
   const handleBackPress = () => {
     console.log('[Header] Back button pressed');
@@ -84,44 +73,6 @@ export default function CarControlScreen() {
     navigation.navigate('Settings');
   };
 
-  const handleTabChange = (newIndex: number) => {
-    console.log('[Tab] Changed to:', TAB_ROUTES[newIndex]?.key, '(index:', newIndex + ')');
-    setIndex(newIndex);
-  };
-
-  const renderTabBar = () => (
-    <View style={styles.tabShell}>
-      <TouchableOpacity
-        activeOpacity={0.85}
-        style={[styles.tabButton, index === 0 && styles.activeTab]}
-        onPress={() => handleTabChange(0)}
-      >
-        <MaterialIcons
-          name="directions-car"
-          size={22}
-          color={index === 0 ? '#FFFFFF' : '#6B7280'}
-        />
-        <Text style={[styles.tabText, index === 0 && styles.activeTabText]}>
-          {TAB_ROUTES[0].title}
-        </Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        activeOpacity={0.85}
-        style={[styles.tabButton, index === 1 && styles.activeTab]}
-        onPress={() => handleTabChange(1)}
-      >
-        <MaterialIcons
-          name="precision-manufacturing"
-          size={22}
-          color={index === 1 ? '#FFFFFF' : '#6B7280'}
-        />
-        <Text style={[styles.tabText, index === 1 && styles.activeTabText]}>
-          {TAB_ROUTES[1].title}
-        </Text>
-      </TouchableOpacity>
-    </View>
-  );
 
   return (
     <SafeAreaProvider>
@@ -202,14 +153,35 @@ export default function CarControlScreen() {
             </View>
           </View>
 
-          <TabView
-            navigationState={{ index, routes: TAB_ROUTES }}
-            renderScene={renderScene}
-            onIndexChange={handleTabChange}
-            initialLayout={{ width: layout.width }}
-            renderTabBar={renderTabBar}
-            swipeEnabled={false}
-          />
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.singlePageContent}>
+            <Text style={styles.pageTitle}>Araç Kontrol Paneli</Text>
+            <Text style={styles.pageSubtitle}>Tüm kontroller tek sayfada. Mouse kaydırma tüm sayfayı hareket ettirir.</Text>
+
+            <View style={styles.sectionWrap}>
+              <View style={styles.headerPillContainer}>
+                <View style={styles.headerPill}>
+                  <View style={styles.headerPillIconBox}>
+                    <MaterialIcons name="directions-car" size={18} color="#0A84FF" />
+                  </View>
+                  <Text style={styles.headerPillText}>Araç Kontrol</Text>
+                </View>
+              </View>
+              <RCCarTab disableScroll />
+            </View>
+
+            <View style={styles.sectionWrap}>
+              <View style={styles.headerPillContainer}>
+                <View style={styles.headerPill}>
+                  <View style={styles.headerPillIconBox}>
+                    <MaterialIcons name="precision-manufacturing" size={18} color="#0A84FF" />
+                  </View>
+                  <Text style={styles.headerPillText}>Robot Kol</Text>
+                </View>
+              </View>
+              <RobotArmTab disableScroll />
+            </View>
+
+          </ScrollView>
         </View>
       </SafeAreaView>
     </SafeAreaProvider>

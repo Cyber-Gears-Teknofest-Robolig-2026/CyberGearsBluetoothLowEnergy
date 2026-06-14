@@ -85,6 +85,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.22,
     shadowRadius: 7,
+    zIndex: 3,
+    cursor: 'pointer' as any,
   },
 
   armButtonVerticalTop: {
@@ -135,6 +137,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 3,
+    zIndex: 1,
   },
 
   armInputBoxVertical: {

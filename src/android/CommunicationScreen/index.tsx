@@ -58,7 +58,7 @@ export default function CommunicationScreen() {
   const readSubscriptionRef = useRef<any>(null);
 
   const currentMessageId = useRef(0);
-  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const scrollToBottom = useCallback((animated = true, delay = 100) => {
     if (scrollTimeoutRef.current) {

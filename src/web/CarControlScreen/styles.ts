@@ -118,6 +118,79 @@ const styles = StyleSheet.create({
   activeTabText: {
     color: '#FFFFFF',
   },
+
+  headerPillContainer: {
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+
+  headerPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    minWidth: 220,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#D5DFEA',
+    gap: 10,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+  },
+
+  headerPillIconBox: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: '#DDEEFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  headerPillText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#111827',
+  },
+
+  singlePageContent: {
+    flexGrow: 1,
+    flexDirection: 'column',
+    gap: 12,
+    paddingTop: 12,
+    paddingHorizontal: 6,
+    paddingBottom: 24,
+  },
+
+  pageTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#0B1220',
+    marginBottom: 2,
+  },
+
+  pageSubtitle: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginBottom: 12,
+  },
+
+  sectionWrap: {
+    backgroundColor: 'transparent',
+    borderRadius: 12,
+    paddingBottom: 6,
+  },
+
+  sectionTitle: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#111827',
+    marginBottom: 6,
+  },
 });
 
 export default styles;

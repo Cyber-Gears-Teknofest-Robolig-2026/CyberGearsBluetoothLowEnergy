@@ -243,6 +243,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.22,
     shadowRadius: 7,
+    zIndex: 3,
+    cursor: 'pointer' as any,
   },
 
   speedSliderBox: {
@@ -250,6 +252,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
     justifyContent: 'center',
     overflow: 'hidden',
+    zIndex: 0,
   },
 
   speedInputBox: {
@@ -263,6 +266,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 5,
+    zIndex: 1,
   },
 
   speedInput: {
