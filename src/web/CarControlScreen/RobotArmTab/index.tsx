@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   ScrollView,
   Text,
@@ -17,6 +17,10 @@ import {
 
 const ARM_MIN = 0;
 const ARM_MAX = 180;
+
+// 180° servolarda +/- butonu basılı tutulurken değerin tekrar tekrar
+// değişme (sağa/sola döndürme) hızı.
+const HOLD_REPEAT_MS = 120;
 
 const ARM_COLORS = [
   '#6366F1',
@@ -174,6 +178,33 @@ export default function RobotArmTab() {
   const decrementArm = (index: number) => {
     handleArmChange(index, armValues[index] - ARM_STEP);
   };
+
+  // Basılı tut → değeri tekrar tekrar değiştir (180° servoyu sağa/sola döndürmek
+  // gibi). setInterval içindeki closure bayatlamasın diye en güncel değerleri
+  // ref'ten okuyoruz.
+  const armValuesRef = useRef(armValues);
+  armValuesRef.current = armValues;
+  const holdTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const stepArm = (index: number, dir: 1 | -1) => {
+    handleArmChange(index, armValuesRef.current[index] + dir * ARM_STEP);
+  };
+
+  const startArmHold = (index: number, dir: 1 | -1) => {
+    stopArmHold();
+    stepArm(index, dir); // ilk adımı hemen uygula
+    holdTimerRef.current = setInterval(() => stepArm(index, dir), HOLD_REPEAT_MS);
+  };
+
+  const stopArmHold = () => {
+    if (holdTimerRef.current) {
+      clearInterval(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+  };
+
+  // Ekrandan çıkılırsa sayaç takılı kalmasın.
+  useEffect(() => () => stopArmHold(), []);
 
   const handleArmInputChange = (index: number, text: string) => {
     const onlyNumbers = text.replace(/[^0-9]/g, '');
@@ -374,7 +405,8 @@ export default function RobotArmTab() {
                 },
               ]}
               activeOpacity={0.8}
-              onPress={() => decrementArm(index)}
+              onPressIn={() => startArmHold(index, -1)}
+              onPressOut={stopArmHold}
             >
               <Entypo name="minus" size={18} color="#FFFFFF" />
             </TouchableOpacity>
@@ -403,7 +435,8 @@ export default function RobotArmTab() {
                 },
               ]}
               activeOpacity={0.8}
-              onPress={() => incrementArm(index)}
+              onPressIn={() => startArmHold(index, 1)}
+              onPressOut={stopArmHold}
             >
               <Entypo name="plus" size={18} color="#FFFFFF" />
             </TouchableOpacity>
