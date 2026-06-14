@@ -14,9 +14,102 @@ import { useNavigation } from "@react-navigation/native";
 import {
   AppNavigationProp,
   useBluetoothStore,
+  BluetoothDevice,
   connect,
   isSupported,
 } from "../constants";
+
+const BAUD_RATE = 9600;
+
+// Tarayıcı seri portunu (Web Serial API) Android'deki BluetoothDevice yüzeyine
+// saran adapter. Böylece diğer ekranlar (Communication, CarControl) cihazı
+// android ile bire bir aynı şekilde (write/disconnect/onDataReceived) kullanır.
+const createSerialDevice = (port: any, name: string): BluetoothDevice => {
+  const listeners = new Set<(event: { data: string }) => void>();
+  let reading = true;
+  let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+
+  const startReadLoop = async () => {
+    let textBuffer = "";
+    const decoder = new TextDecoder();
+
+    while (reading && port.readable) {
+      try {
+        const activeReader = port.readable.getReader();
+        reader = activeReader;
+        while (reading) {
+          const { value, done } = await activeReader.read();
+          if (done) break;
+          if (value && value.length) {
+            textBuffer += decoder.decode(value, { stream: true });
+            // android'deki delimiter "\n" davranışı: satır satır yayınla
+            let nlIndex: number;
+            while ((nlIndex = textBuffer.indexOf("\n")) >= 0) {
+              const line = textBuffer.slice(0, nlIndex).replace(/\r$/, "");
+              textBuffer = textBuffer.slice(nlIndex + 1);
+              const data = Buffer.from(line, "utf-8").toString("base64");
+              listeners.forEach((cb) => cb({ data }));
+            }
+          }
+        }
+      } catch (e) {
+        // okuma hatası (ör. cihaz çıkarıldığında) — döngü sonlanır
+      } finally {
+        try {
+          reader?.releaseLock();
+        } catch (e) { }
+        reader = null;
+      }
+      if (!reading) break;
+    }
+  };
+
+  startReadLoop();
+
+  return {
+    name,
+    write: async (data: string) => {
+      // Some browsers throw if the writable stream is temporarily locked by
+      // another writer (rapid writes from sliders). Retry a few times with a
+      // short backoff instead of crashing.
+      const encoded = new TextEncoder().encode(data);
+      const maxAttempts = 6;
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        try {
+          const writer = port.writable.getWriter();
+          try {
+            await writer.write(encoded);
+            return;
+          } finally {
+            try { writer.releaseLock(); } catch (e) { }
+          }
+        } catch (e) {
+          // If locked, wait a bit and retry
+          if (attempt === maxAttempts - 1) throw e;
+          await new Promise((res) => setTimeout(res, 8 * (attempt + 1)));
+        }
+      }
+    },
+
+    onDataReceived: (listener) => {
+      listeners.add(listener);
+      return {
+        remove: () => {
+          listeners.delete(listener);
+        },
+      };
+    },
+    disconnect: async () => {
+      reading = false;
+      try {
+        await reader?.cancel();
+      } catch (e) { }
+      try {
+        await port.close();
+      } catch (e) { }
+    },
+  };
+};
 
 export default function BluetoothConnectionScreen() {
 
@@ -32,7 +125,7 @@ export default function BluetoothConnectionScreen() {
   useEffect(() => {
     if (!isSupported()) {
       window.alert(
-        "Hata: Tarayıcınız Web Bluetooth API desteklemiyor. Chrome veya Edge kullanın."
+        "Hata: Tarayıcınız Web Serial API desteklemiyor. Masaüstü Chrome veya Edge kullanın."
       );
     }
   }, []);
@@ -80,17 +173,17 @@ export default function BluetoothConnectionScreen() {
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Bağlantı Yönetimi</Text>
         <TouchableOpacity
-        onPress={() => {
-          const idx = navigation.getState()?.index ?? 0;
-          if (idx > 0 && typeof window !== 'undefined') {
-            window.history.go(-idx);
-          } else {
-            navigation.navigate('Home');
-          }
-        }}
-        style={styles.homeBtn}
+          onPress={() => {
+            const idx = navigation.getState()?.index ?? 0;
+            if (idx > 0 && typeof window !== 'undefined') {
+              window.history.go(-idx);
+            } else {
+              navigation.navigate('Home');
+            }
+          }}
+          style={styles.homeBtn}
         >
-        <MaterialCommunityIcons name="home" size={24} color="#1E293B" />
+          <MaterialCommunityIcons name="home" size={24} color="#1E293B" />
         </TouchableOpacity>
       </View>
 
@@ -126,8 +219,8 @@ export default function BluetoothConnectionScreen() {
                 {isConnecting
                   ? "Lütfen bekleyin..."
                   : connectedDevice
-                  ? connectedDevice.name
-                  : "Cihaz seçilmedi"}
+                    ? connectedDevice.name
+                    : "Cihaz seçilmedi"}
               </Text>
             </View>
           </View>

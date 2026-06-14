@@ -222,8 +222,9 @@ export default function BluetoothConnectionScreen() {
   const renderDevice = ({ item }: { item: ScannedDevice }) => {
 
     const isConnected = connectedDevice?.address === item.id;
-    const cardStyle = isConnected ? styles.connectedCard : styles.newCard;
-    const iconColor = isConnected ? "#fff" : "#64748B";
+    const isPaired = item.bonded;
+    const cardStyle = isConnected ? styles.connectedCard : isPaired ? styles.pairedCard : styles.newCard;
+    const iconColor = isConnected ? "#fff" : isPaired ? "#0284C7" : "#64748B";
 
     return (
       <Pressable
@@ -241,14 +242,14 @@ export default function BluetoothConnectionScreen() {
           <Text style={styles.deviceName} numberOfLines={1}>{item.name || "Bilinmeyen Cihaz"}</Text>
           <Text style={styles.deviceAddress}>{item.id}</Text>
           <View style={styles.badgeRow}>
-            <View style={[styles.statusBadge, isConnected ? styles.connectedBadge : styles.newBadge]}>
-              <Text style={[styles.statusBadgeText, isConnected ? styles.connectedBadgeText : styles.newBadgeText]}>
-                {isConnected ? "BAĞLI" : "YENİ CİHAZ"}
+            <View style={[styles.statusBadge, isConnected ? styles.connectedBadge : isPaired ? styles.pairedBadge : styles.newBadge]}>
+              <Text style={[styles.statusBadgeText, isConnected ? styles.connectedBadgeText : isPaired ? styles.pairedBadgeText : styles.newBadgeText]}>
+                {isConnected ? "BAĞLI" : isPaired ? "EŞLEŞMİŞ" : "YENİ CİHAZ"}
               </Text>
             </View>
           </View>
         </View>
-        <MaterialCommunityIcons name={isConnected ? "link-off" : "chevron-right"} size={24} color={isConnected ? "#EF4444" : "#CBD5E1"} />
+        <MaterialCommunityIcons name={isConnected ? "link-off" : "chevron-right"} size={24} color={isConnected ? "#EF4444" : isPaired ? "#7DD3FC" : "#CBD5E1"} />
       </Pressable>
     );
   };
