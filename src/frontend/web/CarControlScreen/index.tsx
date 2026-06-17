@@ -45,6 +45,12 @@ function RCCarTab({ disableScroll = false }: { disableScroll?: boolean }) {
   const [speedInput, setSpeedInput] = useState(SPEED_DEFAULT.toString());
 
   const handleDirection = async (direction: string) => {
+    console.log('Direction:', direction);
+    console.log('Speed:', speed);
+    console.log(`${sendValuesHeaders.motor.right_motor}:${speed}\r\n`);
+    console.log(`${sendValuesHeaders.motor.left_motor}:${speed}\r\n`);
+    console.log(`${sendValuesHeaders.motor.all_motors}:${speed},${speed}\r\n`);
+    console.log("-----------------------------------");
     switch (direction) {
       case 'forward':
         if (!allSendsValues.motors) {
@@ -82,6 +88,7 @@ function RCCarTab({ disableScroll = false }: { disableScroll?: boolean }) {
   };
 
   const handleDirectionStop = async () => {
+    console.log('Direction: stop');
     if (!allSendsValues.motors) {
       await connectedDevice?.write(`${sendValuesHeaders.motor.right_motor}:0\r\n`);
       await connectedDevice?.write(`${sendValuesHeaders.motor.left_motor}:0\r\n`);
@@ -92,6 +99,7 @@ function RCCarTab({ disableScroll = false }: { disableScroll?: boolean }) {
 
   const toggleZipline = async () => {
     const nextValue = !ziplineOpen;
+    console.log('Zipline:', nextValue ? 'Open' : 'Close');
     setZiplineOpen(nextValue);
     if (!allSendsValues.ziplines) {
       if (nextValue) {
@@ -115,6 +123,7 @@ function RCCarTab({ disableScroll = false }: { disableScroll?: boolean }) {
     const pwmValue = clamp(value, PWM_MIN, PWM_MAX);
     setSpeed(pwmValue);
     setSpeedInput(pwmValue.toString());
+    console.log('PWM Speed:', pwmValue);
   };
 
   const incrementSpeed = () => handleSpeedChange(speed + PWM_STEP);
@@ -269,6 +278,11 @@ function RobotArmTab({ disableScroll = false }: { disableScroll?: boolean }) {
     setArmInputs((prev) => { const next = [...prev]; next[index] = String(angleValue); return next; });
     const key: keyof typeof sendValuesHeaders.robot_arm = `robot_arm_${index}` as keyof typeof sendValuesHeaders.robot_arm;
     if (!armIs360[index]) {
+      console.log(`Arm ${index}:`, angleValue);
+    } else {
+      console.log(`Arm ${index} (360) Speed:`, angleValue);
+    }
+    if (!armIs360[index]) {
       if (!allSendsValues.robot_arms) {
         await connectedDevice?.write(`${sendValuesHeaders.robot_arm[key]}:${angleValue}\r\n`);
       } else {
@@ -280,6 +294,7 @@ function RobotArmTab({ disableScroll = false }: { disableScroll?: boolean }) {
 
   const handle360Rotation = async (index: number, direction: 'left'|'right') => {
     const speedValue = armValues[index];
+    console.log(`Arm ${index} (360) Rotating ${direction} at speed:`, speedValue);
     if (!allSendsValues.robot_arms) {
       const key: keyof typeof sendValuesHeaders.robot_arm = `robot_arm_${index}` as keyof typeof sendValuesHeaders.robot_arm;
       switch(direction){case 'right': await connectedDevice?.write(`${sendValuesHeaders.robot_arm[key]}:${90+speedValue}\r\n`); break; case 'left': await connectedDevice?.write(`${sendValuesHeaders.robot_arm[key]}:${90-speedValue}\r\n`); break}
@@ -289,9 +304,9 @@ function RobotArmTab({ disableScroll = false }: { disableScroll?: boolean }) {
     }
   };
 
-  const handle360RotationStop = async (index:number)=>{ if(!allSendsValues.robot_arms){ const key: keyof typeof sendValuesHeaders.robot_arm = `robot_arm_${index}` as keyof typeof sendValuesHeaders.robot_arm; await connectedDevice?.write(`${sendValuesHeaders.robot_arm[key]}:${90}\r\n`);} else { const arm_values_new = armValues.map((value, idx)=> !armIs360[idx]? value:90); await connectedDevice?.write(`${sendValuesHeaders.robot_arm.all_robot_arms}:${arm_values_new.join(',')}\r\n`); } };
+  const handle360RotationStop = async (index:number)=>{ console.log(`Arm ${index + 1} (360) Stop`); if(!allSendsValues.robot_arms){ const key: keyof typeof sendValuesHeaders.robot_arm = `robot_arm_${index}` as keyof typeof sendValuesHeaders.robot_arm; await connectedDevice?.write(`${sendValuesHeaders.robot_arm[key]}:${90}\r\n`);} else { const arm_values_new = armValues.map((value, idx)=> !armIs360[idx]? value:90); await connectedDevice?.write(`${sendValuesHeaders.robot_arm.all_robot_arms}:${arm_values_new.join(',')}\r\n`); } };
 
-  const resetArm = (index:number)=>handleArmChange(index, ARM_DEFAULT_VALUES[index]);
+  const resetArm = (index:number)=>{ console.log(`Arm ${index + 1} reset to default:`, ARM_DEFAULT_VALUES[index]); handleArmChange(index, ARM_DEFAULT_VALUES[index]); };
   const incrementArm = (index:number)=>handleArmChange(index, armValues[index]+ARM_STEP);
   const decrementArm = (index:number)=>handleArmChange(index, armValues[index]-ARM_STEP);
 

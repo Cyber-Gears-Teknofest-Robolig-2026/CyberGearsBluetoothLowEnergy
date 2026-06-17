@@ -24,12 +24,15 @@ import {
   useBluetoothStore,
   useSettingsStore,
 } from "./constants";
-import { onAdapterPoweredOff, onDeviceDisconnected } from "./BTControlLib";
+import { useBluetooth } from "./BluetoothContext";
+import { useEffectiveTheme } from "./theme";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const AppNavigator = () => {
 
+  const effectiveTheme = useEffectiveTheme();
+  const bluetooth = useBluetooth();
 
   const connectedDevice = useBluetoothStore((state) => state.connectedDevice);
   const setConnectedDevice = useBluetoothStore((state) => state.setConnectedDevice);
@@ -42,7 +45,7 @@ const AppNavigator = () => {
 
   useEffect(() => {
     // Bluetooth kapatılırsa: kullanıcıyı uyar ve bağlantıyı temizle.
-    const stateSubscription = onAdapterPoweredOff(() => {
+    const stateSubscription = bluetooth.onBluetoothDisabled(() => {
       Alert.alert(
         "Hata",
         "Bluetooth kapalı!"
@@ -55,34 +58,31 @@ const AppNavigator = () => {
     return () => {
       stateSubscription.remove();
     };
-  }, []);
+  }, [bluetooth]);
 
   useEffect(() => {
     // Bağlı cihaz menzilden çıkar / gücü kesilirse bağlantı koptu olarak işle.
     if (!connectedDevice) return;
-    const disconnectSubscription = onDeviceDisconnected(
-      connectedDevice.id,
-      () => {
-        const { manuallyDisconnected } = useBluetoothStore.getState();
-        setConnectedDevice(null);
-        if (!manuallyDisconnected) {
-          Alert.alert(
-            "Bağlantı Koptu ⚠️",
-            "Cihazın gücü kesildi veya menzilden çıkıldı."
-          );
-        }
-        setManuallyDisconnected(false);
+    const disconnectSubscription = bluetooth.onDeviceDisconnected(() => {
+      const { manuallyDisconnected } = useBluetoothStore.getState();
+      setConnectedDevice(null);
+      if (!manuallyDisconnected) {
+        Alert.alert(
+          "Bağlantı Koptu ⚠️",
+          "Cihazın gücü kesildi veya menzilden çıkıldı."
+        );
       }
-    );
+      setManuallyDisconnected(false);
+    });
     return () => disconnectSubscription.remove();
-  }, [connectedDevice]);
+  }, [connectedDevice, bluetooth]);
 
   if (!settingsHydrated) {
     return null;
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer theme={effectiveTheme === "dark" ? DarkTheme : DefaultTheme}>
       <Stack.Navigator
         initialRouteName="Home"
         screenOptions={{

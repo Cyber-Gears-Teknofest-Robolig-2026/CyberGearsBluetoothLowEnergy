@@ -26,6 +26,7 @@ import {
   defaultSettings,
   useSettingsStore,
 } from '../constants';
+import { useThemeStore, useEffectiveTheme } from '../theme';
 
 // Form için number alanları string olarak tutulur ki düzenlerken boş bırakılabilsin.
 type DraftSettings = {
@@ -331,6 +332,8 @@ export default function SettingsScreen() {
     );
   };
 
+  const themeMode = useThemeStore((s) => s.mode);
+
   // --- Kaydedilmemiş değişiklik koruması ------------------------------------
   // beforeRemove'dan sonra eylemi tekrar dispatch ederken döngüye girmemek için.
   const allowLeaveRef = useRef(false);
@@ -416,6 +419,31 @@ export default function SettingsScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
+        <Card title="Görünüm" icon="theme-light-dark" iconColor="#0A84FF" iconBg="#E0F2FE">
+          {/* Tema modu — zustand store üzerinden güncellenir */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 8 }}>
+            <TouchableOpacity
+              onPress={() => useThemeStore.getState().setMode('system')}
+              style={{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, backgroundColor: themeMode === 'system' ? '#DDE6F6' : '#F1F5F9', borderWidth: themeMode === 'system' ? 2 : 0, borderColor: '#0A84FF' }}
+            >
+              <Text style={{ fontWeight: themeMode === 'system' ? '700' : '400' }}>Otomatik</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => useThemeStore.getState().setMode('light')}
+              style={{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, backgroundColor: themeMode === 'light' ? '#E8F8FF' : '#FFFFFF', borderWidth: themeMode === 'light' ? 2 : 0, borderColor: '#0A84FF' }}
+            >
+              <Text style={{ fontWeight: themeMode === 'light' ? '700' : '400' }}>Açık</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => useThemeStore.getState().setMode('dark')}
+              style={{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, backgroundColor: themeMode === 'dark' ? '#0b1220' : '#0F172A', borderWidth: themeMode === 'dark' ? 2 : 0, borderColor: '#38BDF8' }}
+            >
+              <Text style={{ color: '#FFFFFF', fontWeight: themeMode === 'dark' ? '700' : '400' }}>Karanlık</Text>
+            </TouchableOpacity>
+          </View>
+        </Card>
         <Card title="Gönderim Başlıkları" icon="code-tags" iconColor="#6D28D9" iconBg="#EDE9FE">
           <Text style={styles.subGroupTitle}>Motor</Text>
           <TextRow label="Sağ Motor" value={draft.sendValuesHeaders.motor.right_motor} onChangeText={(t) => setMotorHeader('right_motor', t)} />

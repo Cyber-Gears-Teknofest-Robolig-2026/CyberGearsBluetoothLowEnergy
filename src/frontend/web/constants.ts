@@ -14,28 +14,19 @@ export type RootStackParamList = {
 export type AppNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 // ----------------------------------------------------------------------------
-// BlueTooth Low Energy (RFCOMM / SPP) — web'de Web Serial API üzerinden. UUID/servis
-// gerekmez; satır temelli ('\n') düz metin çerçeveleme kullanılır (bkz.
-// ./BTControlLib).
+// Bluetooth motoru (bağlanma / izinler / olaylar) artık BACKEND'tedir
+// (src/backend/web — Web Serial API). Frontend ona yalnızca BluetoothContext'teki
+// useBluetooth() üzerinden erişir. Tip sözleşmesi (ScannedDevice, ConnectedDevice,
+// Subscription) BluetoothContext'te tanımlıdır; burada sadece yeniden export
+// edilir. Aşağıdaki store yalnızca AKTİF bağlantı + mesaj durumunu tutar.
 // ----------------------------------------------------------------------------
-
-// ----------------------------------------------------------------------------
-// Taşımadan bağımsız Bluetooth yüzeyi (tipler) + durum (store). Taşıma katmanı
-// (./BTControlLib) bu tipleri/store'u buradan import eder; ekranlar da. constants
-// ise BTControlLib'i import ETMEZ (re-export yok). Böylece iki dosya birbirini
-// import etmez ve require döngüsü oluşmaz. Ekranlar taşıma fonksiyonlarını
-// (connect, isSupported, ...) doğrudan "../BTControlLib"ten alır.
-// ----------------------------------------------------------------------------
-export type Subscription = { remove: () => void };
-
-export type BluetoothDevice = {
-  name: string;
-  write: (data: string) => Promise<void>;
-  disconnect: () => Promise<void>;
-  onDataReceived: (
-    listener: (event: { data: string }) => void
-  ) => Subscription;
-};
+export type {
+  Subscription,
+  DeviceKind,
+  ScannedDevice,
+  ConnectedDevice,
+} from "./BluetoothContext";
+import type { ConnectedDevice } from "./BluetoothContext";
 
 export interface Message {
   id: number;
@@ -45,8 +36,8 @@ export interface Message {
 }
 
 type BluetoothStore = {
-  connectedDevice: BluetoothDevice | null;
-  setConnectedDevice: (device: BluetoothDevice | null) => void;
+  connectedDevice: ConnectedDevice | null;
+  setConnectedDevice: (device: ConnectedDevice | null) => void;
   messages: Message[];
   setMessages: (messages: Message[]) => void;
   manuallyDisconnected: boolean;
@@ -195,7 +186,7 @@ export const useSettingsStore = create<SettingsStore>()(
 );
 
 // ----------------------------------------------------------------------------
-// Bluetooth implementasyonu (Classic / Web Serial) ayrı dosyadadır: ./BTControlLib.
-// constants onu import ETMEZ; ekranlar connect/isSupported'ı doğrudan oradan alır.
-// Böylece constants <-> BTControlLib karşılıklı importu (ve require döngüsü) olmaz.
+// Bluetooth motorunun gerçek implementasyonu backend'tedir (src/backend/web).
+// Frontend onu yalnızca BluetoothContext üzerinden (App.tsx'te enjekte edilerek)
+// tanır; doğrudan import etmez.
 // ----------------------------------------------------------------------------

@@ -1,6 +1,10 @@
 import React from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { NavigationContainer } from "@react-navigation/native";
+import {
+  DarkTheme,
+  DefaultTheme,
+  NavigationContainer,
+} from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import HomeScreen from "./HomeScreen";
 import BluetoothConnectionScreen from "./BluetoothConnectionScreen";
@@ -9,8 +13,8 @@ import CarControlScreen from "./CarControlScreen";
 import SettingsScreen from "./SettingsScreen";
 import {
   RootStackParamList,
-  useSettingsStore,
 } from "./constants";
+import { useEffectiveTheme } from "./theme";
 
 // Shim for react-native-web deprecation: move any props.pointerEvents -> style.pointerEvents
 // This runs only in web (window defined) and ensures third-party or forwarded props
@@ -38,9 +42,11 @@ if (typeof window !== "undefined") {
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const AppNavigator = () => {
+  const effectiveTheme = useEffectiveTheme();
 
   return (
     <NavigationContainer
+      theme={effectiveTheme === "dark" ? DarkTheme : DefaultTheme}
       documentTitle={{
         formatter: (_, route) => {
           const titles: Record<string, string> = {

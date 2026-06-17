@@ -10,6 +10,16 @@ const styles = StyleSheet.create({
     paddingTop: 20, 
     paddingBottom: 10 
   },
+  headerTopRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  headerTextBox: {
+    flex: 1,
+    minWidth: 0,
+  },
   mainHeaderText: { 
     fontSize: 28, 
     fontWeight: "900", 
@@ -20,6 +30,19 @@ const styles = StyleSheet.create({
     color: "#64748B", 
     fontWeight: "500", 
     marginTop: 4 
+  },
+  themeButtonRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  themeButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
   scrollContent: { 
     paddingHorizontal: 25, 
@@ -33,14 +56,17 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff", 
     paddingVertical: 20, 
     paddingHorizontal: 20, 
-    borderRadius: 24, 
+    borderRadius: 20, 
     borderWidth: 1, 
     borderColor: "#F1F5F9", 
     elevation: 3 
   },
   menuIconCircle: { 
-    padding: 14, 
-    borderRadius: 18, 
+    width: 58,
+    height: 58,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 16 
   },
   menuTextContent: { 

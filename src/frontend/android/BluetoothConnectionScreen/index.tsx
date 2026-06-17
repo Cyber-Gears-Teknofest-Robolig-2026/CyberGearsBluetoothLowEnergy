@@ -29,13 +29,7 @@ import {
   useBluetoothStore,
   ScannedDevice,
 } from "../constants";
-import {
-  requestPermissions,
-  ensureEnabled,
-  startScan as bleStartScan,
-  stopScan as bleStopScan,
-  connect,
-} from "../BTControlLib";
+import { useBluetooth } from "../BluetoothContext";
 
 export default function BluetoothConnectionScreen() {
 
@@ -47,6 +41,7 @@ export default function BluetoothConnectionScreen() {
   const setManuallyDisconnected = useBluetoothStore((state) => state.setManuallyDisconnected);
 
   const navigation = useNavigation<AppNavigationProp>();
+  const bluetooth = useBluetooth();
 
   const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = useWindowDimensions();
   const isLandscape = SCREEN_WIDTH > SCREEN_HEIGHT;
@@ -95,7 +90,7 @@ export default function BluetoothConnectionScreen() {
       clearTimeout(scanTimeoutRef.current);
       scanTimeoutRef.current = null;
     }
-    bleStopScan();
+    bluetooth.stopScan();
     setScanning(false);
   };
 
@@ -139,13 +134,13 @@ export default function BluetoothConnectionScreen() {
 
   const openBluetoothModal = async () => {
 
-    const permitted = await requestPermissions();
+    const permitted = await bluetooth.requestPermissions();
     if (!permitted) {
       Alert.alert('Permissions Required', 'Bluetooth permissions are required to scan and connect to devices.');
       return;
     }
 
-    if (!(await ensureEnabled())) {
+    if (!(await bluetooth.ensureEnabled())) {
       Alert.alert('Hata', 'Bu ayara girilebilmesi için Bluetooth açık olmalıdır!');
       return;
     }
@@ -158,35 +153,38 @@ export default function BluetoothConnectionScreen() {
 
     // Cihazları tara (eşleşmiş + keşfedilen). Tekilleştirme burada yapılır.
     const found = new Map<string, ScannedDevice>();
-    bleStartScan(
-      (device) => {
+    bluetooth.startScan({
+      onDevice: (device) => {
         if (!found.has(device.id)) {
           found.set(device.id, device);
           setDevices(Array.from(found.values()));
         }
       },
-      () => {
+      onError: () => {
         stopScan();
         Alert.alert('Hata', 'Cihazlar taranamadı.');
-      }
-    );
+      },
+      onComplete: () => {
+        setScanning(false);
+      },
+    });
 
-    // 10 sn sonra taramayı durdur.
+    // Güvenlik için tarama göstergesini en geç 10 sn sonra durdur.
     scanTimeoutRef.current = setTimeout(stopScan, 10000);
   };
 
-  const connectToDevice = async (device: { id: string }) => {
-    if (!(await ensureEnabled())) {
+  const connectToDevice = async (device: ScannedDevice) => {
+    if (!(await bluetooth.ensureEnabled())) {
       Alert.alert('Hata', 'Bu cihaza bağlanabilmesi için Bluetooth açık olmalıdır!');
       return;
     }
     try {
       closeModal();
       setIsConnecting(true);
-      const connected = await connect(device.id);
+      const connected = await bluetooth.connect(device);
       setConnectedDevice(connected);
       setMessages([]);
-      saveLastConnectedDevice({ id: device.id, name: connected.name });
+      saveLastConnectedDevice(device);
       setIsConnecting(false);
     }
     catch (e) {
@@ -223,7 +221,7 @@ export default function BluetoothConnectionScreen() {
 
   const renderDevice = ({ item }: { item: ScannedDevice }) => {
 
-    const isConnected = connectedDevice?.address === item.id;
+    const isConnected = connectedDevice?.address === item.address;
     const isPaired = item.bonded;
     const cardStyle = isConnected ? styles.connectedCard : isPaired ? styles.pairedCard : styles.newCard;
     const iconColor = isConnected ? "#fff" : isPaired ? "#0284C7" : "#64748B";

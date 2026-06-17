@@ -155,6 +155,10 @@ export default function CommunicationScreen() {
 
       setInputText("");
       scrollToBottom(true, 150);
+      // Gönderimden sonra odağı input'ta tut. Enter'da blurOnSubmit kapalı olsa da
+      // butona mouse ile tıklayınca odak kayabiliyor; ayrıca input boşalınca buton
+      // disabled olup odağı çalabiliyor. Re-render'dan sonra odağı geri ver.
+      requestAnimationFrame(() => inputRef.current?.focus());
     } catch (e) {
       window.alert("Veri gönderilemedi. Cihaz bağlı mı?");
     }
@@ -324,6 +328,7 @@ export default function CommunicationScreen() {
               onBlur={() => setIsFocused(false)}
               maxLength={1000}
               returnKeyType="send"
+              blurOnSubmit={false}
               onSubmitEditing={sendMessage}
             />
 

@@ -14,31 +14,19 @@ export type RootStackParamList = {
 export type AppNavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 // ----------------------------------------------------------------------------
-// BlueTooth Low Energy (RFCOMM / SPP) — seri haberleşme. UUID/servis gerekmez;
-// satır temelli ('\n') düz metin çerçeveleme kullanılır (bkz. ./BTControlLib).
+// Bluetooth motoru (tarama / bağlanma / izinler / olaylar) artık BACKEND'tedir
+// (src/backend/android). Frontend ona yalnızca BluetoothContext'teki
+// useBluetooth() üzerinden erişir. Tip sözleşmesi (ScannedDevice, ConnectedDevice,
+// Subscription) BluetoothContext'te tanımlıdır; burada sadece yeniden export
+// edilir. Aşağıdaki store yalnızca AKTİF bağlantı + mesaj durumunu tutar.
 // ----------------------------------------------------------------------------
-
-// ----------------------------------------------------------------------------
-// Taşımadan bağımsız Bluetooth yüzeyi (tipler) + durum (store). Taşıma katmanı
-// (./BTControlLib) bu tipleri buradan import eder; ekranlar da. constants ise
-// BTControlLib'i import ETMEZ (re-export yok). Böylece iki dosya birbirini import
-// etmez ve require döngüsü oluşmaz. Ekranlar taşıma fonksiyonlarını (connect,
-// startScan, ...) doğrudan "../BTControlLib"ten alır.
-// ----------------------------------------------------------------------------
-export type ScannedDevice = { id: string; name: string; bonded?: boolean };
-
-export type Subscription = { remove: () => void };
-
-export type BluetoothDevice = {
-  id: string;
-  address: string; // ekran uyumluluğu için id'nin takma adı
-  name: string;
-  write: (data: string) => Promise<void>;
-  disconnect: () => Promise<void>;
-  onDataReceived: (
-    listener: (event: { data: string }) => void
-  ) => Subscription;
-};
+export type {
+  Subscription,
+  DeviceKind,
+  ScannedDevice,
+  ConnectedDevice,
+} from "./BluetoothContext";
+import type { ConnectedDevice } from "./BluetoothContext";
 
 export interface Message {
   id: number;
@@ -48,8 +36,8 @@ export interface Message {
 }
 
 type BluetoothStore = {
-  connectedDevice: BluetoothDevice | null;
-  setConnectedDevice: (device: BluetoothDevice | null) => void;
+  connectedDevice: ConnectedDevice | null;
+  setConnectedDevice: (device: ConnectedDevice | null) => void;
   messages: Message[];
   setMessages: (messages: Message[]) => void;
   manuallyDisconnected: boolean;
@@ -198,9 +186,7 @@ export const useSettingsStore = create<SettingsStore>()(
 );
 
 // ----------------------------------------------------------------------------
-// Bluetooth implementasyonu (Classic / react-native-bluetooth-classic) ayrı
-// dosyadadır: ./BTControlLib. constants onu import ETMEZ; ekranlar taşıma
-// fonksiyonlarını (connect, startScan, ...) doğrudan oradan alır. Böylece
-// constants <-> BTControlLib karşılıklı importu (ve require döngüsü) olmaz. Başka
-// bir Bluetooth çeşidine geçerken yalnızca o dosya değişir.
+// Bluetooth motorunun gerçek implementasyonu backend'tedir (src/backend/android).
+// Frontend onu yalnızca BluetoothContext üzerinden (App.tsx'te enjekte edilerek)
+// tanır; doğrudan import etmez.
 // ----------------------------------------------------------------------------
