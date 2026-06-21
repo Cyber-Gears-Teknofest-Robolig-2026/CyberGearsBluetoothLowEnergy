@@ -94,8 +94,14 @@ export type ZiplineAngles = {
 export type AppSettings = {
   sendValuesHeaders: SendValuesHeaders;
   allSendsValues: AllSendsValues;
+  /** Araç hız kontrolü varsayılan modu: false = ortak, true = ayrı ayrı (sağ/sol). */
+  motorControlSeparateDefault: boolean;
   motorSpeedDefault: number;
   motorSpeedStepDefault: number;
+  rightMotorSpeedDefault: number;
+  rightMotorSpeedStepDefault: number;
+  leftMotorSpeedDefault: number;
+  leftMotorSpeedStepDefault: number;
   armsAre360Default: boolean[];
   armValuesDefault: number[];
   armValuesStepDefault: number;
@@ -129,8 +135,13 @@ export const defaultSettings: AppSettings = {
     robot_arms: false,
     ziplines: true,
   },
+  motorControlSeparateDefault: false,
   motorSpeedDefault: 255,
   motorSpeedStepDefault: 5,
+  rightMotorSpeedDefault: 255,
+  rightMotorSpeedStepDefault: 5,
+  leftMotorSpeedDefault: 255,
+  leftMotorSpeedStepDefault: 5,
   armsAre360Default: [true, false, false, false, true, false],
   armValuesDefault: [30, 90, 90, 90, 30, 90],
   armValuesStepDefault: 5,
@@ -162,8 +173,13 @@ export const useSettingsStore = create<SettingsStore>()(
       partialize: ({
         sendValuesHeaders,
         allSendsValues,
+        motorControlSeparateDefault,
         motorSpeedDefault,
         motorSpeedStepDefault,
+        rightMotorSpeedDefault,
+        rightMotorSpeedStepDefault,
+        leftMotorSpeedDefault,
+        leftMotorSpeedStepDefault,
         armsAre360Default,
         armValuesDefault,
         armValuesStepDefault,
@@ -171,8 +187,13 @@ export const useSettingsStore = create<SettingsStore>()(
       }) => ({
         sendValuesHeaders,
         allSendsValues,
+        motorControlSeparateDefault,
         motorSpeedDefault,
         motorSpeedStepDefault,
+        rightMotorSpeedDefault,
+        rightMotorSpeedStepDefault,
+        leftMotorSpeedDefault,
+        leftMotorSpeedStepDefault,
         armsAre360Default,
         armValuesDefault,
         armValuesStepDefault,

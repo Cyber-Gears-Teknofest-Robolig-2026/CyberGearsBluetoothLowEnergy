@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   ScrollView,
-  Switch,
   Text,
   TextInput,
   ToastAndroid,
@@ -18,6 +17,7 @@ import { useNavigation } from '@react-navigation/native';
 // altında) ki diğer ekranların safe area'sı etkilenmesin.
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import CustomSlider from '../CustomComponents/CustomSlider';
+import ToggleSwitch from '../CustomComponents/ToggleSwitch';
 import styles from './styles';
 import {
   AppNavigationProp,
@@ -26,14 +26,18 @@ import {
   defaultSettings,
   useSettingsStore,
 } from '../constants';
-import { useThemeStore, useEffectiveTheme } from '../theme';
 
 // Form için number alanları string olarak tutulur ki düzenlerken boş bırakılabilsin.
 type DraftSettings = {
   sendValuesHeaders: SendValuesHeaders;
   allSendsValues: AppSettings['allSendsValues'];
+  motorControlSeparateDefault: boolean;
   motorSpeedDefault: string;
   motorSpeedStepDefault: string;
+  rightMotorSpeedDefault: string;
+  rightMotorSpeedStepDefault: string;
+  leftMotorSpeedDefault: string;
+  leftMotorSpeedStepDefault: string;
   armsAre360Default: boolean[];
   armValuesDefault: string[];
   armValuesStepDefault: string;
@@ -50,8 +54,13 @@ const toDraft = (s: AppSettings): DraftSettings => ({
     zipline: { ...s.sendValuesHeaders.zipline },
   },
   allSendsValues: { ...s.allSendsValues },
+  motorControlSeparateDefault: s.motorControlSeparateDefault,
   motorSpeedDefault: String(s.motorSpeedDefault),
   motorSpeedStepDefault: String(s.motorSpeedStepDefault),
+  rightMotorSpeedDefault: String(s.rightMotorSpeedDefault),
+  rightMotorSpeedStepDefault: String(s.rightMotorSpeedStepDefault),
+  leftMotorSpeedDefault: String(s.leftMotorSpeedDefault),
+  leftMotorSpeedStepDefault: String(s.leftMotorSpeedStepDefault),
   armsAre360Default: [...s.armsAre360Default],
   armValuesDefault: s.armValuesDefault.map(String),
   armValuesStepDefault: String(s.armValuesStepDefault),
@@ -86,8 +95,13 @@ const ZIPLINE_CLOSE_COLOR = '#475569';
 const fromDraft = (d: DraftSettings): AppSettings => ({
   sendValuesHeaders: d.sendValuesHeaders,
   allSendsValues: d.allSendsValues,
+  motorControlSeparateDefault: d.motorControlSeparateDefault,
   motorSpeedDefault: num(d.motorSpeedDefault),
   motorSpeedStepDefault: num(d.motorSpeedStepDefault),
+  rightMotorSpeedDefault: num(d.rightMotorSpeedDefault),
+  rightMotorSpeedStepDefault: num(d.rightMotorSpeedStepDefault),
+  leftMotorSpeedDefault: num(d.leftMotorSpeedDefault),
+  leftMotorSpeedStepDefault: num(d.leftMotorSpeedStepDefault),
   armsAre360Default: d.armsAre360Default,
   armValuesDefault: d.armValuesDefault.map(num),
   armValuesStepDefault: num(d.armValuesStepDefault),
@@ -175,12 +189,29 @@ const SwitchRow = ({
 }) => (
   <View style={styles.row}>
     <Text style={styles.rowLabel}>{label}</Text>
-    <Switch
-      value={value}
-      onValueChange={onValueChange}
-      trackColor={{ true: '#0A84FF', false: '#CBD5E1' }}
-      thumbColor="#FFFFFF"
-    />
+    <ToggleSwitch value={value} onValueChange={onValueChange} />
+  </View>
+);
+
+// Araç kontrol ekranındaki "Ortak / Ayrı ayrı" anahtarının ayarlardaki eşi:
+// duruma göre renklenen etiket + özel toggle.
+const MotorModeRow = ({
+  label,
+  value,
+  onValueChange,
+}: {
+  label: string;
+  value: boolean;
+  onValueChange: (value: boolean) => void;
+}) => (
+  <View style={styles.row}>
+    <Text style={styles.rowLabel}>{label}</Text>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+      <Text style={{ fontSize: 13, fontWeight: '700', color: value ? '#0A84FF' : '#64748B' }}>
+        {value ? 'Ayrı ayrı' : 'Ortak'}
+      </Text>
+      <ToggleSwitch value={value} onValueChange={onValueChange} />
+    </View>
   </View>
 );
 
@@ -332,8 +363,6 @@ export default function SettingsScreen() {
     );
   };
 
-  const themeMode = useThemeStore((s) => s.mode);
-
   // --- Kaydedilmemiş değişiklik koruması ------------------------------------
   // beforeRemove'dan sonra eylemi tekrar dispatch ederken döngüye girmemek için.
   const allowLeaveRef = useRef(false);
@@ -344,8 +373,13 @@ export default function SettingsScreen() {
     const saved: AppSettings = {
       sendValuesHeaders: s.sendValuesHeaders,
       allSendsValues: s.allSendsValues,
+      motorControlSeparateDefault: s.motorControlSeparateDefault,
       motorSpeedDefault: s.motorSpeedDefault,
       motorSpeedStepDefault: s.motorSpeedStepDefault,
+      rightMotorSpeedDefault: s.rightMotorSpeedDefault,
+      rightMotorSpeedStepDefault: s.rightMotorSpeedStepDefault,
+      leftMotorSpeedDefault: s.leftMotorSpeedDefault,
+      leftMotorSpeedStepDefault: s.leftMotorSpeedStepDefault,
       armsAre360Default: s.armsAre360Default,
       armValuesDefault: s.armValuesDefault,
       armValuesStepDefault: s.armValuesStepDefault,
@@ -393,145 +427,152 @@ export default function SettingsScreen() {
       <StatusBar style="dark" />
 
       <GestureHandlerRootView style={{ flex: 1 }}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <MaterialCommunityIcons name="arrow-left" size={22} color="#1E293B" />
-        </TouchableOpacity>
-        <View style={styles.headerTextBox}>
-          <Text style={styles.headerTitle}>Ayarlar</Text>
-          <Text style={styles.headerSubtitle}>Gönderim başlıkları ve varsayılan değerler</Text>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+            <MaterialCommunityIcons name="arrow-left" size={22} color="#1E293B" />
+          </TouchableOpacity>
+          <View style={styles.headerTextBox}>
+            <Text style={styles.headerTitle}>Ayarlar</Text>
+            <Text style={styles.headerSubtitle}>Gönderim başlıkları ve varsayılan değerler</Text>
+          </View>
+
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => navigation.reset({ index: 0, routes: [{ name: 'Home' }] })}
+          >
+            <MaterialCommunityIcons name="home" size={22} color="#1E293B" />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.navigate('CarControl')}>
+            <MaterialCommunityIcons name="car" size={22} color="#0A84FF" />
+          </TouchableOpacity>
         </View>
 
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigation.reset({ index: 0, routes: [{ name: 'Home' }] })}
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
-          <MaterialCommunityIcons name="home" size={22} color="#1E293B" />
-        </TouchableOpacity>
+          <Card title="Gönderim Başlıkları" icon="code-tags" iconColor="#6D28D9" iconBg="#EDE9FE">
+            <Text style={styles.subGroupTitle}>Motor</Text>
+            <TextRow label="Sağ Motor" value={draft.sendValuesHeaders.motor.right_motor} onChangeText={(t) => setMotorHeader('right_motor', t)} />
+            <TextRow label="Sol Motor" value={draft.sendValuesHeaders.motor.left_motor} onChangeText={(t) => setMotorHeader('left_motor', t)} />
+            <TextRow label="Tüm Motorlar" value={draft.sendValuesHeaders.motor.all_motors} onChangeText={(t) => setMotorHeader('all_motors', t)} />
 
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.navigate('CarControl')}>
-          <MaterialCommunityIcons name="car" size={22} color="#0A84FF" />
-        </TouchableOpacity>
-      </View>
+            <View style={styles.divider} />
+            <Text style={styles.subGroupTitle}>Robot Kol</Text>
+            <TextRow label="Kol 0" value={draft.sendValuesHeaders.robot_arm.robot_arm_0} onChangeText={(t) => setArmHeader('robot_arm_0', t)} />
+            <TextRow label="Kol 1" value={draft.sendValuesHeaders.robot_arm.robot_arm_1} onChangeText={(t) => setArmHeader('robot_arm_1', t)} />
+            <TextRow label="Kol 2" value={draft.sendValuesHeaders.robot_arm.robot_arm_2} onChangeText={(t) => setArmHeader('robot_arm_2', t)} />
+            <TextRow label="Kol 3" value={draft.sendValuesHeaders.robot_arm.robot_arm_3} onChangeText={(t) => setArmHeader('robot_arm_3', t)} />
+            <TextRow label="Kol 4" value={draft.sendValuesHeaders.robot_arm.robot_arm_4} onChangeText={(t) => setArmHeader('robot_arm_4', t)} />
+            <TextRow label="Kol 5" value={draft.sendValuesHeaders.robot_arm.robot_arm_5} onChangeText={(t) => setArmHeader('robot_arm_5', t)} />
+            <TextRow label="Tüm Kollar" value={draft.sendValuesHeaders.robot_arm.all_robot_arms} onChangeText={(t) => setArmHeader('all_robot_arms', t)} />
 
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        <Card title="Görünüm" icon="theme-light-dark" iconColor="#0A84FF" iconBg="#E0F2FE">
-          {/* Tema modu — zustand store üzerinden güncellenir */}
-          <View style={{ flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 8 }}>
-            <TouchableOpacity
-              onPress={() => useThemeStore.getState().setMode('system')}
-              style={{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, backgroundColor: themeMode === 'system' ? '#DDE6F6' : '#F1F5F9', borderWidth: themeMode === 'system' ? 2 : 0, borderColor: '#0A84FF' }}
-            >
-              <Text style={{ fontWeight: themeMode === 'system' ? '700' : '400' }}>Otomatik</Text>
-            </TouchableOpacity>
+            <View style={styles.divider} />
+            <Text style={styles.subGroupTitle}>Zipline</Text>
+            <TextRow label="Ön Zipline" value={draft.sendValuesHeaders.zipline.front_zipline} onChangeText={(t) => setZiplineHeader('front_zipline', t)} />
+            <TextRow label="Arka Zipline" value={draft.sendValuesHeaders.zipline.back_zipline} onChangeText={(t) => setZiplineHeader('back_zipline', t)} />
+            <TextRow label="Tüm Ziplineler" value={draft.sendValuesHeaders.zipline.all_ziplines} onChangeText={(t) => setZiplineHeader('all_ziplines', t)} />
+          </Card>
 
-            <TouchableOpacity
-              onPress={() => useThemeStore.getState().setMode('light')}
-              style={{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, backgroundColor: themeMode === 'light' ? '#E8F8FF' : '#FFFFFF', borderWidth: themeMode === 'light' ? 2 : 0, borderColor: '#0A84FF' }}
-            >
-              <Text style={{ fontWeight: themeMode === 'light' ? '700' : '400' }}>Açık</Text>
-            </TouchableOpacity>
+          <Card title="Toplu Gönderim" icon="checkbox-multiple-marked-outline" iconColor="#0284C7" iconBg="#E0F2FE">
+            <SwitchRow label="Motorlar (tek komut)" value={draft.allSendsValues.motors} onValueChange={(v) => setAllSends('motors', v)} />
+            <SwitchRow label="Robot Kollar (tek komut)" value={draft.allSendsValues.robot_arms} onValueChange={(v) => setAllSends('robot_arms', v)} />
+            <SwitchRow label="Ziplineler (tek komut)" value={draft.allSendsValues.ziplines} onValueChange={(v) => setAllSends('ziplines', v)} />
+          </Card>
 
-            <TouchableOpacity
-              onPress={() => useThemeStore.getState().setMode('dark')}
-              style={{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, backgroundColor: themeMode === 'dark' ? '#0b1220' : '#0F172A', borderWidth: themeMode === 'dark' ? 2 : 0, borderColor: '#38BDF8' }}
-            >
-              <Text style={{ color: '#FFFFFF', fontWeight: themeMode === 'dark' ? '700' : '400' }}>Karanlık</Text>
-            </TouchableOpacity>
-          </View>
-        </Card>
-        <Card title="Gönderim Başlıkları" icon="code-tags" iconColor="#6D28D9" iconBg="#EDE9FE">
-          <Text style={styles.subGroupTitle}>Motor</Text>
-          <TextRow label="Sağ Motor" value={draft.sendValuesHeaders.motor.right_motor} onChangeText={(t) => setMotorHeader('right_motor', t)} />
-          <TextRow label="Sol Motor" value={draft.sendValuesHeaders.motor.left_motor} onChangeText={(t) => setMotorHeader('left_motor', t)} />
-          <TextRow label="Tüm Motorlar" value={draft.sendValuesHeaders.motor.all_motors} onChangeText={(t) => setMotorHeader('all_motors', t)} />
-
-          <View style={styles.divider} />
-          <Text style={styles.subGroupTitle}>Robot Kol</Text>
-          <TextRow label="Kol 0" value={draft.sendValuesHeaders.robot_arm.robot_arm_0} onChangeText={(t) => setArmHeader('robot_arm_0', t)} />
-          <TextRow label="Kol 1" value={draft.sendValuesHeaders.robot_arm.robot_arm_1} onChangeText={(t) => setArmHeader('robot_arm_1', t)} />
-          <TextRow label="Kol 2" value={draft.sendValuesHeaders.robot_arm.robot_arm_2} onChangeText={(t) => setArmHeader('robot_arm_2', t)} />
-          <TextRow label="Kol 3" value={draft.sendValuesHeaders.robot_arm.robot_arm_3} onChangeText={(t) => setArmHeader('robot_arm_3', t)} />
-          <TextRow label="Kol 4" value={draft.sendValuesHeaders.robot_arm.robot_arm_4} onChangeText={(t) => setArmHeader('robot_arm_4', t)} />
-          <TextRow label="Kol 5" value={draft.sendValuesHeaders.robot_arm.robot_arm_5} onChangeText={(t) => setArmHeader('robot_arm_5', t)} />
-          <TextRow label="Tüm Kollar" value={draft.sendValuesHeaders.robot_arm.all_robot_arms} onChangeText={(t) => setArmHeader('all_robot_arms', t)} />
-
-          <View style={styles.divider} />
-          <Text style={styles.subGroupTitle}>Zipline</Text>
-          <TextRow label="Ön Zipline" value={draft.sendValuesHeaders.zipline.front_zipline} onChangeText={(t) => setZiplineHeader('front_zipline', t)} />
-          <TextRow label="Arka Zipline" value={draft.sendValuesHeaders.zipline.back_zipline} onChangeText={(t) => setZiplineHeader('back_zipline', t)} />
-          <TextRow label="Tüm Ziplineler" value={draft.sendValuesHeaders.zipline.all_ziplines} onChangeText={(t) => setZiplineHeader('all_ziplines', t)} />
-        </Card>
-
-        <Card title="Toplu Gönderim" icon="checkbox-multiple-marked-outline" iconColor="#0284C7" iconBg="#E0F2FE">
-          <SwitchRow label="Motorlar (tek komut)" value={draft.allSendsValues.motors} onValueChange={(v) => setAllSends('motors', v)} />
-          <SwitchRow label="Robot Kollar (tek komut)" value={draft.allSendsValues.robot_arms} onValueChange={(v) => setAllSends('robot_arms', v)} />
-          <SwitchRow label="Ziplineler (tek komut)" value={draft.allSendsValues.ziplines} onValueChange={(v) => setAllSends('ziplines', v)} />
-        </Card>
-
-        <Card title="Motor" icon="speedometer" iconColor="#15803D" iconBg="#DCFCE7">
-          <SliderField
-            label="Varsayılan Hız"
-            value={draft.motorSpeedDefault}
-            min={0}
-            max={255}
-            color="#0A84FF"
-            onChange={(t) => setDraft((d) => ({ ...d, motorSpeedDefault: t }))}
-          />
-          <NumberRow label="Hız Adımı" value={draft.motorSpeedStepDefault} onChangeText={(t) => setDraft((d) => ({ ...d, motorSpeedStepDefault: t }))} />
-        </Card>
-
-        <Card title="Robot Kol" icon="robot-industrial" iconColor="#B45309" iconBg="#FEF3C7">
-          <Text style={styles.subGroupTitle}>360° Servo mu?</Text>
-          {draft.armsAre360Default.map((is360, i) => (
-            <SwitchRow key={`a360-${i}`} label={`Kol ${i}`} value={is360} onValueChange={(v) => setArm360(i, v)} />
-          ))}
-
-          <View style={styles.divider} />
-          <Text style={styles.subGroupTitle}>Varsayılan Açılar</Text>
-          {draft.armValuesDefault.map((val, i) => (
-            <SliderField
-              key={`adef-${i}`}
-              label={draft.armsAre360Default[i] ? `Kol ${i} (360°)` : `Kol ${i}`}
-              value={val}
-              min={0}
-              max={draft.armsAre360Default[i] ? 90 : 180}
-              color={ARM_COLORS[i]}
-              onChange={(t) => setArmDefault(i, t)}
+          <Card title="Motor" icon="speedometer" iconColor="#15803D" iconBg="#DCFCE7">
+            <MotorModeRow
+              label="Hız kontrolü"
+              value={draft.motorControlSeparateDefault}
+              onValueChange={(v) => setDraft((d) => ({ ...d, motorControlSeparateDefault: v }))}
             />
-          ))}
 
-          <View style={styles.divider} />
-          <NumberRow label="Açı Adımı" value={draft.armValuesStepDefault} onChangeText={(t) => setDraft((d) => ({ ...d, armValuesStepDefault: t }))} />
-        </Card>
+            <View style={styles.divider} />
+            <Text style={styles.subGroupTitle}>Ortak</Text>
+            <SliderField
+              label="Varsayılan Hız"
+              value={draft.motorSpeedDefault}
+              min={0}
+              max={255}
+              color="#0A84FF"
+              onChange={(t) => setDraft((d) => ({ ...d, motorSpeedDefault: t }))}
+            />
+            <NumberRow label="Hız Adımı" value={draft.motorSpeedStepDefault} onChangeText={(t) => setDraft((d) => ({ ...d, motorSpeedStepDefault: t }))} />
 
-        <Card title="Zipline Açıları" icon="transmission-tower" iconColor="#BE185D" iconBg="#FCE7F3">
-          <Text style={styles.subGroupTitle}>Ön</Text>
-          <SliderField label="Açık" value={draft.ziplineAnglesDefault.front.open} min={0} max={180} color={ZIPLINE_OPEN_COLOR} onChange={(t) => setZiplineAngle('front', 'open', t)} />
-          <SliderField label="Kapalı" value={draft.ziplineAnglesDefault.front.close} min={0} max={180} color={ZIPLINE_CLOSE_COLOR} onChange={(t) => setZiplineAngle('front', 'close', t)} />
+            <View style={styles.divider} />
+            <Text style={styles.subGroupTitle}>Sağ Motor</Text>
+            <SliderField
+              label="Varsayılan Hız"
+              value={draft.rightMotorSpeedDefault}
+              min={0}
+              max={255}
+              color="#F59E0B"
+              onChange={(t) => setDraft((d) => ({ ...d, rightMotorSpeedDefault: t }))}
+            />
+            <NumberRow label="Hız Adımı" value={draft.rightMotorSpeedStepDefault} onChangeText={(t) => setDraft((d) => ({ ...d, rightMotorSpeedStepDefault: t }))} />
 
-          <View style={styles.divider} />
-          <Text style={styles.subGroupTitle}>Arka</Text>
-          <SliderField label="Açık" value={draft.ziplineAnglesDefault.back.open} min={0} max={180} color={ZIPLINE_OPEN_COLOR} onChange={(t) => setZiplineAngle('back', 'open', t)} />
-          <SliderField label="Kapalı" value={draft.ziplineAnglesDefault.back.close} min={0} max={180} color={ZIPLINE_CLOSE_COLOR} onChange={(t) => setZiplineAngle('back', 'close', t)} />
-        </Card>
-      </ScrollView>
+            <View style={styles.divider} />
+            <Text style={styles.subGroupTitle}>Sol Motor</Text>
+            <SliderField
+              label="Varsayılan Hız"
+              value={draft.leftMotorSpeedDefault}
+              min={0}
+              max={255}
+              color="#22C55E"
+              onChange={(t) => setDraft((d) => ({ ...d, leftMotorSpeedDefault: t }))}
+            />
+            <NumberRow label="Hız Adımı" value={draft.leftMotorSpeedStepDefault} onChangeText={(t) => setDraft((d) => ({ ...d, leftMotorSpeedStepDefault: t }))} />
+          </Card>
 
-      <View style={styles.footer}>
-        <TouchableOpacity style={styles.resetBtn} activeOpacity={0.85} onPress={handleReset}>
-          <MaterialCommunityIcons name="restore" size={20} color="#EF4444" />
-          <Text style={styles.resetBtnText}>Sıfırla</Text>
-        </TouchableOpacity>
+          <Card title="Robot Kol" icon="robot-industrial" iconColor="#B45309" iconBg="#FEF3C7">
+            <Text style={styles.subGroupTitle}>360° Servo mu?</Text>
+            {draft.armsAre360Default.map((is360, i) => (
+              <SwitchRow key={`a360-${i}`} label={`Kol ${i}`} value={is360} onValueChange={(v) => setArm360(i, v)} />
+            ))}
 
-        <TouchableOpacity style={styles.saveBtn} activeOpacity={0.9} onPress={handleSave}>
-          <MaterialCommunityIcons name="content-save" size={20} color="#FFFFFF" />
-          <Text style={styles.saveBtnText}>Kaydet</Text>
-        </TouchableOpacity>
-      </View>
+            <View style={styles.divider} />
+            <Text style={styles.subGroupTitle}>Varsayılan Açılar</Text>
+            {draft.armValuesDefault.map((val, i) => (
+              <SliderField
+                key={`adef-${i}`}
+                label={draft.armsAre360Default[i] ? `Kol ${i} (360°)` : `Kol ${i}`}
+                value={val}
+                min={0}
+                max={draft.armsAre360Default[i] ? 90 : 180}
+                color={ARM_COLORS[i]}
+                onChange={(t) => setArmDefault(i, t)}
+              />
+            ))}
+
+            <View style={styles.divider} />
+            <NumberRow label="Açı Adımı" value={draft.armValuesStepDefault} onChangeText={(t) => setDraft((d) => ({ ...d, armValuesStepDefault: t }))} />
+          </Card>
+
+          <Card title="Zipline Açıları" icon="transmission-tower" iconColor="#BE185D" iconBg="#FCE7F3">
+            <Text style={styles.subGroupTitle}>Ön</Text>
+            <SliderField label="Açık" value={draft.ziplineAnglesDefault.front.open} min={0} max={180} color={ZIPLINE_OPEN_COLOR} onChange={(t) => setZiplineAngle('front', 'open', t)} />
+            <SliderField label="Kapalı" value={draft.ziplineAnglesDefault.front.close} min={0} max={180} color={ZIPLINE_CLOSE_COLOR} onChange={(t) => setZiplineAngle('front', 'close', t)} />
+
+            <View style={styles.divider} />
+            <Text style={styles.subGroupTitle}>Arka</Text>
+            <SliderField label="Açık" value={draft.ziplineAnglesDefault.back.open} min={0} max={180} color={ZIPLINE_OPEN_COLOR} onChange={(t) => setZiplineAngle('back', 'open', t)} />
+            <SliderField label="Kapalı" value={draft.ziplineAnglesDefault.back.close} min={0} max={180} color={ZIPLINE_CLOSE_COLOR} onChange={(t) => setZiplineAngle('back', 'close', t)} />
+          </Card>
+        </ScrollView>
+
+        <View style={styles.footer}>
+          <TouchableOpacity style={styles.resetBtn} activeOpacity={0.85} onPress={handleReset}>
+            <MaterialCommunityIcons name="restore" size={20} color="#EF4444" />
+            <Text style={styles.resetBtnText}>Sıfırla</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.saveBtn} activeOpacity={0.9} onPress={handleSave}>
+            <MaterialCommunityIcons name="content-save" size={20} color="#FFFFFF" />
+            <Text style={styles.saveBtnText}>Kaydet</Text>
+          </TouchableOpacity>
+        </View>
       </GestureHandlerRootView>
     </SafeAreaView>
   );

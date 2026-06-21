@@ -299,8 +299,15 @@ export default function BluetoothConnectionScreen() {
               <Text style={styles.infoText}>{isConnecting ? "Lütfen bekleyin..." : connectedDevice ? connectedDevice.name : "Cihaz seçilmedi"}</Text>
             </View>
           </View>
-          <TouchableOpacity style={styles.scanBtn} onPress={openBluetoothModal} disabled={isConnecting}>
-            <Text style={styles.scanBtnText}>Cihaz Ara ve Bağlan</Text>
+          <TouchableOpacity
+            style={[styles.scanBtn, { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 }]}
+            onPress={openBluetoothModal}
+            disabled={isConnecting}
+          >
+            {isConnecting && <ActivityIndicator size="small" color="#fff" />}
+            <Text style={styles.scanBtnText}>
+              {isConnecting ? "Bağlanıyor..." : "Cihaz Ara ve Bağlan"}
+            </Text>
           </TouchableOpacity>
           {connectedDevice && !isConnecting && (
             <TouchableOpacity style={styles.disconnectBtn} onPress={disconnectDevice}>

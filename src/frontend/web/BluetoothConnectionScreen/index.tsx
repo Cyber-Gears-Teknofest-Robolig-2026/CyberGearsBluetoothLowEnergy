@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   View,
   Text,
@@ -17,6 +17,31 @@ import {
 } from "../constants";
 import { useBluetooth } from "../BluetoothContext";
 
+/**
+ * Web Serial neden kullanılamıyor? Tek "desteklenmiyor" mesajı yerine kullanıcıya
+ * çözülebilir bir sebep gösterir. ÖNEMLİ: Web Serial yalnızca GÜVENLİ BAĞLAMDA
+ * (https veya http://localhost) çalışır; LAN IP'si (192.168.x.x) ile açılırsa
+ * `navigator.serial` hiç var olmaz. Bu yüzden önce güvenli bağlamı kontrol ederiz.
+ */
+type SerialStatus =
+  | { ok: true }
+  | { ok: false; message: string };
+
+const INSECURE_MSG =
+  "Web Serial yalnızca güvenli bağlamda çalışır. Uygulamayı http://localhost:8081 adresinden açın — IP adresi (örn. 192.168.x.x) ile Bluetooth bağlantısı kurulamaz.";
+const UNSUPPORTED_MSG =
+  "Tarayıcınız Web Serial API desteklemiyor. Masaüstü Chrome veya Edge kullanın (Brave'de varsayılan olarak kapalıdır).";
+
+function getSerialStatus(): SerialStatus {
+  if (typeof window !== "undefined" && window.isSecureContext === false) {
+    return { ok: false, message: INSECURE_MSG };
+  }
+  if (typeof navigator === "undefined" || !("serial" in navigator)) {
+    return { ok: false, message: UNSUPPORTED_MSG };
+  }
+  return { ok: true };
+}
+
 export default function BluetoothConnectionScreen() {
 
   const connectedDevice = useBluetoothStore((state) => state.connectedDevice);
@@ -28,20 +53,14 @@ export default function BluetoothConnectionScreen() {
   const bluetooth = useBluetooth();
 
   const [isConnecting, setIsConnecting] = useState(false);
-
-  useEffect(() => {
-    // Web Serial desteklenmiyorsa kullanıcıyı bilgilendir (backend isEnabled()
-    // tarayıcı desteğini bildirir).
-    bluetooth.isEnabled().then((ok) => {
-      if (!ok) {
-        window.alert(
-          "Hata: Tarayıcınız Web Serial API desteklemiyor. Masaüstü Chrome veya Edge kullanın."
-        );
-      }
-    });
-  }, [bluetooth]);
+  // Web Serial durumu: bloklayan popup yerine ekran içinde sebep gösterilir.
+  const [serialStatus] = useState<SerialStatus>(() => getSerialStatus());
 
   const selectAndConnect = async () => {
+    if (!serialStatus.ok) {
+      window.alert(serialStatus.message);
+      return;
+    }
     try {
       setIsConnecting(true);
 
@@ -50,9 +69,10 @@ export default function BluetoothConnectionScreen() {
       setConnectedDevice(device);
       setMessages([]);
     } catch (e: any) {
-      // Kullanıcı tarayıcının port seçici penceresini iptal ettiyse sessiz geç.
+      // Kullanıcı tarayıcının port seçici penceresini iptal ettiyse (ya da hiç
+      // seri/COM port yoksa) sessiz geç; aksi halde gerçek hatayı göster.
       if (e?.name !== "NotFoundError" && e?.name !== "AbortError") {
-        window.alert("Hata: Bağlantı kurulamadı.");
+        window.alert(`Bağlantı kurulamadı: ${e?.message ?? "Bilinmeyen hata"}`);
       }
     } finally {
       setIsConnecting(false);
@@ -134,8 +154,25 @@ export default function BluetoothConnectionScreen() {
               </Text>
             </View>
           </View>
-          <TouchableOpacity style={styles.scanBtn} onPress={selectAndConnect} disabled={isConnecting}>
-            <Text style={styles.scanBtnText}>Cihaz Seç ve Bağlan</Text>
+          {!serialStatus.ok && (
+            <View style={styles.warningBanner}>
+              <MaterialCommunityIcons name="alert-circle-outline" size={20} color="#92400E" />
+              <Text style={styles.warningBannerText}>{serialStatus.message}</Text>
+            </View>
+          )}
+          <TouchableOpacity
+            style={[
+              styles.scanBtn,
+              { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
+              !serialStatus.ok && styles.scanBtnDisabled,
+            ]}
+            onPress={selectAndConnect}
+            disabled={isConnecting || !serialStatus.ok}
+          >
+            {isConnecting && <ActivityIndicator size="small" color="#fff" />}
+            <Text style={styles.scanBtnText}>
+              {isConnecting ? "Bağlanıyor..." : "Cihaz Seç ve Bağlan"}
+            </Text>
           </TouchableOpacity>
           {connectedDevice && !isConnecting && (
             <TouchableOpacity style={styles.disconnectBtn} onPress={disconnectDevice}>

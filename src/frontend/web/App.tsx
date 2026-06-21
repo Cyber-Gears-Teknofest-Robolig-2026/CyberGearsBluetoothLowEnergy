@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import {
   DarkTheme,
@@ -13,7 +13,9 @@ import CarControlScreen from "./CarControlScreen";
 import SettingsScreen from "./SettingsScreen";
 import {
   RootStackParamList,
+  useBluetoothStore,
 } from "./constants";
+import { useBluetooth } from "./BluetoothContext";
 import { useEffectiveTheme } from "./theme";
 
 // Shim for react-native-web deprecation: move any props.pointerEvents -> style.pointerEvents
@@ -43,6 +45,28 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const AppNavigator = () => {
   const effectiveTheme = useEffectiveTheme();
+  const bluetooth = useBluetooth();
+  const connectedDevice = useBluetoothStore((state) => state.connectedDevice);
+  const setConnectedDevice = useBluetoothStore((state) => state.setConnectedDevice);
+  const setManuallyDisconnected = useBluetoothStore((state) => state.setManuallyDisconnected);
+
+  useEffect(() => {
+    // COM port koparsa (cihaz çıkarıldı / güç kesildi / akış koptu) backend
+    // onDeviceDisconnected'i tetikler. Bağlantıyı temizle ve kullanıcıyı uyar.
+    // Manuel kesmede backend bu olayı tetiklemez; yine de bayrağı kontrol ederiz.
+    if (!connectedDevice) return;
+    const subscription = bluetooth.onDeviceDisconnected(() => {
+      const { manuallyDisconnected } = useBluetoothStore.getState();
+      setConnectedDevice(null);
+      if (!manuallyDisconnected) {
+        window.alert(
+          "Bağlantı koptu: COM port kapandı (cihaz çıkarıldı, gücü kesildi veya menzilden çıktı)."
+        );
+      }
+      setManuallyDisconnected(false);
+    });
+    return () => subscription.remove();
+  }, [connectedDevice, bluetooth]);
 
   return (
     <NavigationContainer

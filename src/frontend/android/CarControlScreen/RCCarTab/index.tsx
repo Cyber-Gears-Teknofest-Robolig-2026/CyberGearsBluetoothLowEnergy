@@ -11,6 +11,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Entypo, MaterialIcons } from '@expo/vector-icons';
 import CustomSlider from '../../CustomComponents/CustomSlider';
 import HoldButton from '../../CustomComponents/HoldButton';
+import ToggleSwitch from '../../CustomComponents/ToggleSwitch';
 import styles from './styles';
 import {
   useBluetoothStore,
@@ -35,58 +36,47 @@ export default function RCCarTab() {
   const sendValuesHeaders = useSettingsStore((state) => state.sendValuesHeaders);
   const allSendsValues = useSettingsStore((state) => state.allSendsValues);
   const ziplineAnglesDefault = useSettingsStore((state) => state.ziplineAnglesDefault);
+  const SEPARATE_DEFAULT = useSettingsStore((state) => state.motorControlSeparateDefault);
   const SPEED_DEFAULT = useSettingsStore((state) => state.motorSpeedDefault);
   const PWM_STEP = useSettingsStore((state) => state.motorSpeedStepDefault);
+  const RIGHT_SPEED_DEFAULT = useSettingsStore((state) => state.rightMotorSpeedDefault);
+  const RIGHT_PWM_STEP = useSettingsStore((state) => state.rightMotorSpeedStepDefault);
+  const LEFT_SPEED_DEFAULT = useSettingsStore((state) => state.leftMotorSpeedDefault);
+  const LEFT_PWM_STEP = useSettingsStore((state) => state.leftMotorSpeedStepDefault);
 
   const [ziplineOpen, setZiplineOpen] = useState(false);
   const [vehicleScrollHeight, setVehicleScrollHeight] = useState(0);
 
+  // Ortak (false) veya ayrı ayrı (true) hız kontrolü. Varsayılan ayarlardan gelir.
+  const [separateMode, setSeparateMode] = useState(SEPARATE_DEFAULT);
+
   const [speed, setSpeed] = useState(SPEED_DEFAULT);
   const [speedInput, setSpeedInput] = useState(SPEED_DEFAULT.toString());
+  const [rightSpeed, setRightSpeed] = useState(RIGHT_SPEED_DEFAULT);
+  const [rightSpeedInput, setRightSpeedInput] = useState(RIGHT_SPEED_DEFAULT.toString());
+  const [leftSpeed, setLeftSpeed] = useState(LEFT_SPEED_DEFAULT);
+  const [leftSpeedInput, setLeftSpeedInput] = useState(LEFT_SPEED_DEFAULT.toString());
 
   const handleDirection = async (direction: string) => {
-    console.log('Direction:', direction);
-    console.log('Speed:', speed);
-    console.log(`${sendValuesHeaders.motor.right_motor}:${speed}\r\n`);
-    console.log(`${sendValuesHeaders.motor.left_motor}:${speed}\r\n`);
-    console.log(`${sendValuesHeaders.motor.all_motors}:${speed},${speed}\r\n`);
-    console.log("-----------------------------------");
+    // Moda göre her motorun hızı: ortakta ikisi de `speed`, ayrıda sağ/sol bağımsız.
+    const rBase = separateMode ? rightSpeed : speed;
+    const lBase = separateMode ? leftSpeed : speed;
+    // Yön işaretleri (tank dönüşü): [sağ, sol]
+    let r = 0;
+    let l = 0;
     switch (direction) {
-      case 'forward':
-        if (!allSendsValues.motors) {
-          await connectedDevice?.write(`${sendValuesHeaders.motor.right_motor}:${speed}\r\n`);
-          await connectedDevice?.write(`${sendValuesHeaders.motor.left_motor}:${speed}\r\n`);
-        }
-        else {
-          await connectedDevice?.write(`${sendValuesHeaders.motor.all_motors}:${speed},${speed}\r\n`);
-        }
-        break;
-      case 'backward':
-        if (!allSendsValues.motors) {
-          await connectedDevice?.write(`${sendValuesHeaders.motor.right_motor}:-${speed}\r\n`);
-          await connectedDevice?.write(`${sendValuesHeaders.motor.left_motor}:-${speed}\r\n`);
-        } else {
-          await connectedDevice?.write(`${sendValuesHeaders.motor.all_motors}:-${speed},-${speed}\r\n`);
-        }
-        break;
-      case 'right':
-        if (!allSendsValues.motors) {
-          await connectedDevice?.write(`${sendValuesHeaders.motor.right_motor}:-${speed}\r\n`);
-          await connectedDevice?.write(`${sendValuesHeaders.motor.left_motor}:${speed}\r\n`);
-        }
-        else {
-          await connectedDevice?.write(`${sendValuesHeaders.motor.all_motors}:-${speed},${speed}\r\n`);
-        }
-        break;
-      case 'left':
-        if (!allSendsValues.motors) {
-          await connectedDevice?.write(`${sendValuesHeaders.motor.right_motor}:${speed}\r\n`);
-          await connectedDevice?.write(`${sendValuesHeaders.motor.left_motor}:-${speed}\r\n`);
-        }
-        else {
-          await connectedDevice?.write(`${sendValuesHeaders.motor.all_motors}:-${speed},${speed}\r\n`);
-        }
-        break;
+      case 'forward': r = rBase; l = lBase; break;
+      case 'backward': r = -rBase; l = -lBase; break;
+      case 'right': r = -rBase; l = lBase; break;
+      case 'left': r = rBase; l = -lBase; break;
+    }
+    console.log('Direction:', direction, '| R:', r, '| L:', l);
+    if (!allSendsValues.motors) {
+      await connectedDevice?.write(`${sendValuesHeaders.motor.right_motor}:${r}\r\n`);
+      await connectedDevice?.write(`${sendValuesHeaders.motor.left_motor}:${l}\r\n`);
+    }
+    else {
+      await connectedDevice?.write(`${sendValuesHeaders.motor.all_motors}:${r},${l}\r\n`);
     }
   };
 
@@ -125,45 +115,79 @@ export default function RCCarTab() {
     }
   };
 
-  const handleSpeedChange = (rawValue: number | number[]) => {
-    const value = getSliderValue(rawValue);
-    const pwmValue = clamp(value, PWM_MIN, PWM_MAX);
-
-    setSpeed(pwmValue);
-    setSpeedInput(pwmValue.toString());
-
-    console.log('PWM Speed:', pwmValue);
+  // Tek bir hız kontrolünün (slider + −/+ + sayı girişi) tüm davranışlarını üretir.
+  const makeSpeedControl = (
+    value: number,
+    input: string,
+    setValue: (n: number) => void,
+    setInput: (s: string) => void,
+    step: number,
+  ) => {
+    const apply = (rawValue: number | number[]) => {
+      const pwmValue = clamp(getSliderValue(rawValue), PWM_MIN, PWM_MAX);
+      setValue(pwmValue);
+      setInput(pwmValue.toString());
+    };
+    return {
+      value,
+      input,
+      apply,
+      increment: () => apply(value + step),
+      decrement: () => apply(value - step),
+      onInput: (text: string) => {
+        const onlyNumbers = text.replace(/[^0-9]/g, '');
+        setInput(onlyNumbers);
+        if (onlyNumbers === '') return;
+        const numValue = Number(onlyNumbers);
+        if (!Number.isNaN(numValue)) setValue(clamp(numValue, PWM_MIN, PWM_MAX));
+      },
+      normalize: () => apply(input === '' ? value : Number(input)),
+    };
   };
 
-  const incrementSpeed = () => {
-    handleSpeedChange(speed + PWM_STEP);
-  };
+  const commonSpeed = makeSpeedControl(speed, speedInput, setSpeed, setSpeedInput, PWM_STEP);
+  const rightSpeedCtrl = makeSpeedControl(rightSpeed, rightSpeedInput, setRightSpeed, setRightSpeedInput, RIGHT_PWM_STEP);
+  const leftSpeedCtrl = makeSpeedControl(leftSpeed, leftSpeedInput, setLeftSpeed, setLeftSpeedInput, LEFT_PWM_STEP);
 
-  const decrementSpeed = () => {
-    handleSpeedChange(speed - PWM_STEP);
-  };
+  const renderSpeedRow = (ctrl: ReturnType<typeof makeSpeedControl>, fillColor: string) => (
+    <View style={styles.speedControlRow}>
+      <TouchableOpacity style={[styles.roundControlButton, { backgroundColor: fillColor }]} onPress={ctrl.decrement}>
+        <Entypo name="minus" size={20} color="#FFFFFF" />
+      </TouchableOpacity>
 
-  const handleSpeedInputChange = (text: string) => {
-    const onlyNumbers = text.replace(/[^0-9]/g, '');
-    setSpeedInput(onlyNumbers);
+      <View style={styles.speedSliderBox}>
+        <CustomSlider
+          value={ctrl.value}
+          minimumValue={PWM_MIN}
+          maximumValue={PWM_MAX}
+          step={1}
+          onValueChange={ctrl.apply}
+          trackThickness={8}
+          thumbSize={22}
+          trackColor="#D7E0EA"
+          fillColor={fillColor}
+          thumbColor={fillColor}
+        />
+      </View>
 
-    if (onlyNumbers === '') return;
+      <TouchableOpacity style={[styles.roundControlButton, { backgroundColor: fillColor }]} onPress={ctrl.increment}>
+        <Entypo name="plus" size={20} color="#FFFFFF" />
+      </TouchableOpacity>
 
-    const numValue = Number(onlyNumbers);
-
-    if (!Number.isNaN(numValue)) {
-      setSpeed(clamp(numValue, PWM_MIN, PWM_MAX));
-    }
-  };
-
-  const normalizeSpeedInput = () => {
-    if (speedInput === '') {
-      handleSpeedChange(speed);
-      return;
-    }
-
-    handleSpeedChange(Number(speedInput));
-  };
+      <View style={styles.speedInputBox}>
+        <TextInput
+          style={styles.speedInput}
+          value={ctrl.input}
+          onChangeText={ctrl.onInput}
+          onBlur={ctrl.normalize}
+          keyboardType="numeric"
+          maxLength={3}
+          selectTextOnFocus
+        />
+        <Text style={styles.speedInputUnit}>PWM</Text>
+      </View>
+    </View>
+  );
 
   return (
     <ScrollView
@@ -307,7 +331,7 @@ export default function RCCarTab() {
       </View>
 
       <View style={styles.speedCard}>
-        <View style={styles.speedHeaderRow}>
+        <View style={[styles.speedHeaderRow, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}>
           <View style={styles.cardHeader}>
             <View style={styles.headerIconBox}>
               <MaterialIcons name="speed" size={19.2} color="#0A84FF" />
@@ -318,51 +342,24 @@ export default function RCCarTab() {
             </View>
           </View>
 
-        </View>
-
-        <View style={styles.speedControlRow}>
-          <TouchableOpacity
-            style={styles.roundControlButton}
-            onPress={decrementSpeed}
-          >
-            <Entypo name="minus" size={20} color="#FFFFFF" />
-          </TouchableOpacity>
-
-          <View style={styles.speedSliderBox}>
-            <CustomSlider
-              value={speed}
-              minimumValue={PWM_MIN}
-              maximumValue={PWM_MAX}
-              step={1}
-              onValueChange={handleSpeedChange}
-              trackThickness={8}
-              thumbSize={22}
-              trackColor="#D7E0EA"
-              fillColor="#0A84FF"
-              thumbColor="#0A84FF"
-            />
-          </View>
-
-          <TouchableOpacity
-            style={styles.roundControlButton}
-            onPress={incrementSpeed}
-          >
-            <Entypo name="plus" size={20} color="#FFFFFF" />
-          </TouchableOpacity>
-
-          <View style={styles.speedInputBox}>
-            <TextInput
-              style={styles.speedInput}
-              value={speedInput}
-              onChangeText={handleSpeedInputChange}
-              onBlur={normalizeSpeedInput}
-              keyboardType="numeric"
-              maxLength={3}
-              selectTextOnFocus
-            />
-            <Text style={styles.speedInputUnit}>PWM</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={{ fontSize: 13, fontWeight: '700', color: separateMode ? '#0A84FF' : '#64748B' }}>
+              {separateMode ? 'Ayrı ayrı' : 'Ortak'}
+            </Text>
+            <ToggleSwitch value={separateMode} onValueChange={setSeparateMode} />
           </View>
         </View>
+
+        {separateMode ? (
+          <>
+            <Text style={{ fontSize: 13, fontWeight: '700', color: '#475569', marginTop: 10, marginBottom: 6 }}>Sağ Motor</Text>
+            {renderSpeedRow(rightSpeedCtrl, '#F59E0B')}
+            <Text style={{ fontSize: 13, fontWeight: '700', color: '#475569', marginTop: 14, marginBottom: 6 }}>Sol Motor</Text>
+            {renderSpeedRow(leftSpeedCtrl, '#22C55E')}
+          </>
+        ) : (
+          renderSpeedRow(commonSpeed, '#0A84FF')
+        )}
       </View>
     </ScrollView>
   );

@@ -105,8 +105,10 @@ export default function CommunicationScreen() {
 
         if (!receivedData) return;
 
+        console.log("Gelen mesaj:", receivedData);
+
         setMessages([
-          ...messages,
+          ...useBluetoothStore.getState().messages,
           {
             id: currentMessageId.current,
             text: receivedData,
@@ -130,12 +132,16 @@ export default function CommunicationScreen() {
         readSubscriptionRef.current = null;
       }
     };
-  }, [connectedDevice, messages]);
+    // Yalnızca bağlantı değişince yeniden abone ol; her mesajda DEĞİL (gereksiz
+    // dinleyici ekle/çıkar döngüsünü ve bayat closure'ı önler).
+  }, [connectedDevice]);
 
   const sendMessage = async () => {
     if (!inputText.trim()) return;
 
     const sendedData = inputText.trim();
+
+    console.log("Gönderilen mesaj:", sendedData);
 
     try {
       if (connectedDevice) {
@@ -143,7 +149,7 @@ export default function CommunicationScreen() {
       }
 
       setMessages([
-        ...messages,
+        ...useBluetoothStore.getState().messages,
         {
           id: currentMessageId.current,
           text: sendedData,

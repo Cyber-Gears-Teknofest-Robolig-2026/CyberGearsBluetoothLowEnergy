@@ -169,11 +169,33 @@ const styles = StyleSheet.create({
     fontWeight: "900", 
     color: "#1E293B" 
   },
-  scanBtn: { 
-    backgroundColor: "#0984e3", 
-    padding: 18, 
-    borderRadius: 18, 
-    alignItems: "center" 
+  warningBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#FEF3C7",
+    borderColor: "#FCD34D",
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 14,
+  },
+  warningBannerText: {
+    flex: 1,
+    color: "#92400E",
+    fontSize: 13,
+    fontWeight: "700",
+    lineHeight: 18,
+  },
+  scanBtn: {
+    backgroundColor: "#0984e3",
+    padding: 18,
+    borderRadius: 18,
+    alignItems: "center"
+  },
+  scanBtnDisabled: {
+    backgroundColor: "#94A3B8",
+    opacity: 0.7,
   },
   scanBtnText: {
     color: "#fff",

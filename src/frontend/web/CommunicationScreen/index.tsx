@@ -99,8 +99,10 @@ export default function CommunicationScreen() {
 
         if (!receivedData) return;
 
+        console.log("Gelen mesaj:", receivedData);
+
         setMessages([
-          ...messages,
+          ...useBluetoothStore.getState().messages,
           {
             id: currentMessageId.current,
             text: receivedData,
@@ -124,12 +126,16 @@ export default function CommunicationScreen() {
         readSubscriptionRef.current = null;
       }
     };
-  }, [connectedDevice, messages]);
+    // Yalnızca bağlantı değişince yeniden abone ol; mesaj geldikçe DEĞİL. Aksi
+    // halde web'de stream kilidi serbest bırakılmadan getReader() çağrılıp çöker.
+  }, [connectedDevice]);
 
   const sendMessage = async () => {
     if (!inputText.trim()) return;
 
     const sendedData = inputText.trim();
+
+    console.log("Gönderilen mesaj:", sendedData);
 
     try {
       if (connectedDevice) {
@@ -137,7 +143,7 @@ export default function CommunicationScreen() {
       }
 
       setMessages([
-        ...messages,
+        ...useBluetoothStore.getState().messages,
         {
           id: currentMessageId.current,
           text: sendedData,
@@ -169,7 +175,7 @@ export default function CommunicationScreen() {
     inputRef.current?.focus();
   };
 
-  const clearMessages = () => {
+  const clearMessages = async () => {
     if (messages.length === 0) {
       window.alert("Silinecek mesaj yok");
       return;
@@ -178,7 +184,7 @@ export default function CommunicationScreen() {
     if (window.confirm("Ekrandaki bütün mesajlar silinecek. Emin misiniz?")) {
       setMessages([]);
       currentMessageId.current = 0;
-      window.alert("Mesajlar Silindi");
+      window.alert("Mesajlar silindi");
     }
   };
 
