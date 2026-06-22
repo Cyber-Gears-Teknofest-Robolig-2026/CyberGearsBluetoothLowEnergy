@@ -57,6 +57,8 @@ export default function BluetoothConnectionScreen() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [lastConnectedDevice, setLastConnectedDevice] = useState<ScannedDevice | null>(null);
 
+  const connectionCancelledRef = useRef(false);
+
   const panY = useRef(new Animated.Value(SNAP_CLOSED)).current;
   const currentSnapPoint = useRef(SNAP_CLOSED);
   const scanTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -180,17 +182,31 @@ export default function BluetoothConnectionScreen() {
     }
     try {
       closeModal();
+      connectionCancelledRef.current = false;
       setIsConnecting(true);
       const connected = await bluetooth.connect(device);
+      if (connectionCancelledRef.current) {
+        setManuallyDisconnected(true);
+        await connected.disconnect();
+        return;
+      }
       setConnectedDevice(connected);
       setMessages([]);
       saveLastConnectedDevice(device);
       setIsConnecting(false);
     }
     catch (e) {
+      if (!connectionCancelledRef.current) {
+        Alert.alert("Hata", "Bağlantı kurulamadı.");
+      }
       setIsConnecting(false);
-      Alert.alert("Hata", "Bağlantı kurulamadı.");
     }
+  };
+
+  const cancelConnection = () => {
+    connectionCancelledRef.current = true;
+    setIsConnecting(false);
+    ToastAndroid.show("Bağlantı iptal edildi", ToastAndroid.SHORT);
   };
 
   const disconnectDevice = async () => {
@@ -280,10 +296,15 @@ export default function BluetoothConnectionScreen() {
               <View style={styles.statusLabelRow}>
                 <Text style={styles.label}>BAĞLANTI DURUMU</Text>
                 {isConnecting ? (
-                  <View style={styles.connectingBadge}>
+                  <TouchableOpacity
+                    style={styles.connectingBadge}
+                    onPress={cancelConnection}
+                    activeOpacity={0.7}
+                  >
                     <ActivityIndicator size="small" color="#F59E0B" style={styles.smallSpinner} />
                     <Text style={styles.connectingText}>Bağlanıyor...</Text>
-                  </View>
+                    <MaterialCommunityIcons name="close-circle" size={14} color="#D97706" />
+                  </TouchableOpacity>
                 ) : connectedDevice ? (
                   <View style={styles.onlineBadge}>
                     <View style={styles.onlineDot} />

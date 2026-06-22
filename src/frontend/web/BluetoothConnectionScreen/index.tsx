@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import {
   View,
   Text,
@@ -53,6 +53,7 @@ export default function BluetoothConnectionScreen() {
   const bluetooth = useBluetooth();
 
   const [isConnecting, setIsConnecting] = useState(false);
+  const connectionCancelledRef = useRef(false);
   // Web Serial durumu: bloklayan popup yerine ekran içinde sebep gösterilir.
   const [serialStatus] = useState<SerialStatus>(() => getSerialStatus());
 
@@ -62,21 +63,31 @@ export default function BluetoothConnectionScreen() {
       return;
     }
     try {
+      connectionCancelledRef.current = false;
       setIsConnecting(true);
 
       const device = await bluetooth.connect();
+      if (connectionCancelledRef.current) {
+        setManuallyDisconnected(true);
+        await device.disconnect();
+        return;
+      }
       setManuallyDisconnected(false);
       setConnectedDevice(device);
       setMessages([]);
     } catch (e: any) {
-      // Kullanıcı tarayıcının port seçici penceresini iptal ettiyse (ya da hiç
-      // seri/COM port yoksa) sessiz geç; aksi halde gerçek hatayı göster.
-      if (e?.name !== "NotFoundError" && e?.name !== "AbortError") {
+      const cancelled = e?.name === "NotFoundError" || e?.name === "AbortError";
+      if (!cancelled && !connectionCancelledRef.current) {
         window.alert(`Bağlantı kurulamadı: ${e?.message ?? "Bilinmeyen hata"}`);
       }
     } finally {
       setIsConnecting(false);
     }
+  };
+
+  const cancelConnection = () => {
+    connectionCancelledRef.current = true;
+    setIsConnecting(false);
   };
 
   const disconnectDevice = async () => {
@@ -129,10 +140,15 @@ export default function BluetoothConnectionScreen() {
               <View style={styles.statusLabelRow}>
                 <Text style={styles.label}>BAĞLANTI DURUMU</Text>
                 {isConnecting ? (
-                  <View style={styles.connectingBadge}>
+                  <TouchableOpacity
+                    style={styles.connectingBadge}
+                    onPress={cancelConnection}
+                    activeOpacity={0.7}
+                  >
                     <ActivityIndicator size="small" color="#F59E0B" style={styles.smallSpinner} />
                     <Text style={styles.connectingText}>Bağlanıyor...</Text>
-                  </View>
+                    <MaterialCommunityIcons name="close-circle" size={14} color="#D97706" />
+                  </TouchableOpacity>
                 ) : connectedDevice ? (
                   <View style={styles.onlineBadge}>
                     <View style={styles.onlineDot} />

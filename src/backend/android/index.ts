@@ -246,6 +246,10 @@ export const androidBackend: BluetoothApi = {
 
     const disconnect = async () => {
       try {
+        activeDisconnectSub?.remove();
+        activeDisconnectSub = null;
+      } catch { }
+      try {
         subscription.remove();
       } catch { }
       try {
