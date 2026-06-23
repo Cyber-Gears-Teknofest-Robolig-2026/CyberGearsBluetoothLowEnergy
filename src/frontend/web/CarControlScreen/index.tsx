@@ -17,11 +17,10 @@ import styles from './styles';
 import CustomSlider from '../CustomComponents/CustomSlider';
 import HoldButton from '../CustomComponents/HoldButton';
 import ToggleSwitch from '../CustomComponents/ToggleSwitch';
-import { AppNavigationProp, useBluetoothStore, useSettingsStore } from '../constants';
+import { AppNavigationProp, pwmMaxFromResolution, useBluetoothStore, useSettingsStore } from '../constants';
 
 // --- RCCarTab component (migrated) ---
 const PWM_MIN = 0;
-const PWM_MAX = 255;
 
 const getSliderValue = (value: number | number[]) => {
   return Array.isArray(value) ? value[0] : value;
@@ -43,6 +42,11 @@ function RCCarTab({ disableScroll = false }: { disableScroll?: boolean }) {
   const RIGHT_PWM_STEP = useSettingsStore((state) => state.rightMotorSpeedStepDefault);
   const LEFT_SPEED_DEFAULT = useSettingsStore((state) => state.leftMotorSpeedDefault);
   const LEFT_PWM_STEP = useSettingsStore((state) => state.leftMotorSpeedStepDefault);
+
+  // Her hız kontrolünün PWM üst sınırı kendi çözünürlüğünden türetilir: 2^res - 1 (8 bit -> 255).
+  const COMMON_PWM_MAX = pwmMaxFromResolution(useSettingsStore((state) => state.motorPwmResolutionDefault));
+  const RIGHT_PWM_MAX = pwmMaxFromResolution(useSettingsStore((state) => state.rightMotorPwmResolutionDefault));
+  const LEFT_PWM_MAX = pwmMaxFromResolution(useSettingsStore((state) => state.leftMotorPwmResolutionDefault));
 
   const [ziplineOpen, setZiplineOpen] = useState(false);
   const [vehicleScrollHeight, setVehicleScrollHeight] = useState(0);
@@ -117,15 +121,17 @@ function RCCarTab({ disableScroll = false }: { disableScroll?: boolean }) {
     setValue: (n: number) => void,
     setInput: (s: string) => void,
     step: number,
+    max: number,
   ) => {
     const apply = (rawValue: number | number[]) => {
-      const pwmValue = clamp(getSliderValue(rawValue), PWM_MIN, PWM_MAX);
+      const pwmValue = clamp(getSliderValue(rawValue), PWM_MIN, max);
       setValue(pwmValue);
       setInput(pwmValue.toString());
     };
     return {
       value,
       input,
+      max,
       apply,
       increment: () => apply(value + step),
       decrement: () => apply(value - step),
@@ -134,26 +140,31 @@ function RCCarTab({ disableScroll = false }: { disableScroll?: boolean }) {
         setInput(onlyNumbers);
         if (onlyNumbers === '') return;
         const numValue = Number(onlyNumbers);
-        if (!Number.isNaN(numValue)) setValue(clamp(numValue, PWM_MIN, PWM_MAX));
+        if (!Number.isNaN(numValue)) setValue(clamp(numValue, PWM_MIN, max));
       },
       normalize: () => apply(input === '' ? value : Number(input)),
     };
   };
 
-  const commonSpeed = makeSpeedControl(speed, speedInput, setSpeed, setSpeedInput, PWM_STEP);
-  const rightSpeedCtrl = makeSpeedControl(rightSpeed, rightSpeedInput, setRightSpeed, setRightSpeedInput, RIGHT_PWM_STEP);
-  const leftSpeedCtrl = makeSpeedControl(leftSpeed, leftSpeedInput, setLeftSpeed, setLeftSpeedInput, LEFT_PWM_STEP);
+  const commonSpeed = makeSpeedControl(speed, speedInput, setSpeed, setSpeedInput, PWM_STEP, COMMON_PWM_MAX);
+  const rightSpeedCtrl = makeSpeedControl(rightSpeed, rightSpeedInput, setRightSpeed, setRightSpeedInput, RIGHT_PWM_STEP, RIGHT_PWM_MAX);
+  const leftSpeedCtrl = makeSpeedControl(leftSpeed, leftSpeedInput, setLeftSpeed, setLeftSpeedInput, LEFT_PWM_STEP, LEFT_PWM_MAX);
 
-  const renderSpeedRow = (ctrl: ReturnType<typeof makeSpeedControl>, fillColor: string) => (
-    <View style={styles.speedControlRow}>
-      <HoldButton style={[styles.roundControlButton, { backgroundColor: fillColor }]} onPressIn={ctrl.decrement}><Entypo name="minus" size={20} color="#FFFFFF" /></HoldButton>
-      <View style={styles.speedSliderBox}>
-        <CustomSlider value={ctrl.value} minimumValue={PWM_MIN} maximumValue={PWM_MAX} step={1} onValueChange={ctrl.apply} trackThickness={8} thumbSize={22} trackColor="#D7E0EA" fillColor={fillColor} thumbColor={fillColor} />
+  const renderSpeedRow = (ctrl: ReturnType<typeof makeSpeedControl>, fillColor: string) => {
+    const inputMaxLen = String(ctrl.max).length;
+    // Giriş kutusu 3 basamağa göre ayarlı; 4+ basamakta sıkışmasın diye genişlet.
+    const inputBoxWidth = 74 + Math.max(0, inputMaxLen - 3) * 12;
+    return (
+      <View style={styles.speedControlRow}>
+        <HoldButton style={[styles.roundControlButton, { backgroundColor: fillColor }]} onPressIn={ctrl.decrement}><Entypo name="minus" size={20} color="#FFFFFF" /></HoldButton>
+        <View style={styles.speedSliderBox}>
+          <CustomSlider value={ctrl.value} minimumValue={PWM_MIN} maximumValue={ctrl.max} step={1} onValueChange={ctrl.apply} trackThickness={8} thumbSize={22} trackColor="#D7E0EA" fillColor={fillColor} thumbColor={fillColor} />
+        </View>
+        <HoldButton style={[styles.roundControlButton, { backgroundColor: fillColor }]} onPressIn={ctrl.increment}><Entypo name="plus" size={20} color="#FFFFFF" /></HoldButton>
+        <View style={[styles.speedInputBox, { width: inputBoxWidth }]}><TextInput style={styles.speedInput} value={ctrl.input} onChangeText={ctrl.onInput} onBlur={ctrl.normalize} keyboardType="numeric" maxLength={inputMaxLen} selectTextOnFocus /></View>
       </View>
-      <HoldButton style={[styles.roundControlButton, { backgroundColor: fillColor }]} onPressIn={ctrl.increment}><Entypo name="plus" size={20} color="#FFFFFF" /></HoldButton>
-      <View style={styles.speedInputBox}><TextInput style={styles.speedInput} value={ctrl.input} onChangeText={ctrl.onInput} onBlur={ctrl.normalize} keyboardType="numeric" maxLength={3} selectTextOnFocus /></View>
-    </View>
-  );
+    );
+  };
 
   const content = (
     <>
@@ -279,19 +290,33 @@ function RobotArmTab({ disableScroll = false }: { disableScroll?: boolean }) {
   const allSendsValues = useSettingsStore((state) => state.allSendsValues);
   const armsAre360Default = useSettingsStore((state) => state.armsAre360Default);
   const ARM_DEFAULT_VALUES = useSettingsStore((state) => state.armValuesDefault);
+  const ARM_ANGLE_LIMITS = useSettingsStore((state) => state.armAngleLimitsDefault);
   const ARM_STEP = useSettingsStore((state) => state.armValuesStepDefault);
   const { height } = useWindowDimensions();
 
   const [robotScrollHeight, setRobotScrollHeight] = useState(0);
-  const [armValues, setArmValues] = useState<number[]>([...ARM_DEFAULT_VALUES]);
+  // Bir kolun değer aralığı: 360° -> hız 0–90, 180° -> ayardaki min/max açı (sıralı).
+  const armBounds = (index: number, is360: boolean) =>
+    is360
+      ? { lo: 0, hi: 90 }
+      : {
+          lo: Math.min(ARM_ANGLE_LIMITS[index].min, ARM_ANGLE_LIMITS[index].max),
+          hi: Math.max(ARM_ANGLE_LIMITS[index].min, ARM_ANGLE_LIMITS[index].max),
+        };
+  // Her kolun başlangıç değeri, o kolun moduna ait varsayılandan gelir (180° için sınıra kıstırılır).
+  const initialArmValues = ARM_DEFAULT_VALUES.map((v, i) => {
+    if (armsAre360Default[i]) return v.deg360;
+    const { lo, hi } = armBounds(i, false);
+    return clamp(v.deg180, lo, hi);
+  });
+  const [armValues, setArmValues] = useState<number[]>([...initialArmValues]);
   const [armIs360, setArmIs360] = useState<boolean[]>([...armsAre360Default]);
-  const [armInputs, setArmInputs] = useState<string[]>(ARM_DEFAULT_VALUES.map(String));
+  const [armInputs, setArmInputs] = useState<string[]>(initialArmValues.map(String));
 
   const handleArmChange = async (index: number, rawValue: number | number[]) => {
     const value = getSliderValue(rawValue);
-    const min = 0;
-    const max = armIs360[index] ? 90 : 180;
-    const angleValue = clamp(value, min, max);
+    const { lo, hi } = armBounds(index, armIs360[index]);
+    const angleValue = clamp(value, lo, hi);
     const nextValues = [...armValues]; nextValues[index] = angleValue; setArmValues(nextValues);
     setArmInputs((prev) => { const next = [...prev]; next[index] = String(angleValue); return next; });
     const key: keyof typeof sendValuesHeaders.robot_arm = `robot_arm_${index}` as keyof typeof sendValuesHeaders.robot_arm;
@@ -324,7 +349,7 @@ function RobotArmTab({ disableScroll = false }: { disableScroll?: boolean }) {
 
   const handle360RotationStop = async (index:number)=>{ console.log(`Arm ${index + 1} (360) Stop`); if(!allSendsValues.robot_arms){ const key: keyof typeof sendValuesHeaders.robot_arm = `robot_arm_${index}` as keyof typeof sendValuesHeaders.robot_arm; await connectedDevice?.write(`${sendValuesHeaders.robot_arm[key]}:${90}\r\n`);} else { const arm_values_new = armValues.map((value, idx)=> !armIs360[idx]? value:90); await connectedDevice?.write(`${sendValuesHeaders.robot_arm.all_robot_arms}:${arm_values_new.join(',')}\r\n`); } };
 
-  const resetArm = (index:number)=>{ console.log(`Arm ${index + 1} reset to default:`, ARM_DEFAULT_VALUES[index]); handleArmChange(index, ARM_DEFAULT_VALUES[index]); };
+  const resetArm = (index:number)=>{ const def = armIs360[index] ? ARM_DEFAULT_VALUES[index].deg360 : ARM_DEFAULT_VALUES[index].deg180; console.log(`Arm ${index + 1} reset to default:`, def); handleArmChange(index, def); };
   const incrementArm = (index:number)=>handleArmChange(index, armValues[index]+ARM_STEP);
   const decrementArm = (index:number)=>handleArmChange(index, armValues[index]-ARM_STEP);
 
@@ -335,7 +360,7 @@ function RobotArmTab({ disableScroll = false }: { disableScroll?: boolean }) {
   const stopArmHold = ()=>{ if(holdTimerRef.current){ clearInterval(holdTimerRef.current); holdTimerRef.current=null;} };
   useEffect(()=>()=>stopArmHold(), []);
 
-  const handleArmInputChange = (index:number, text:string)=>{ const onlyNumbers = text.replace(/[^0-9]/g,''); setArmInputs(prev=>{ const next=[...prev]; next[index]=onlyNumbers; return next; }); if(onlyNumbers!==''){ const min=0; const max=armIs360[index]?90:180; const clampedValue = clamp(Number(onlyNumbers), min, max); setArmValues(prev=>{ const next=[...prev]; next[index]=clampedValue; return next; }); } };
+  const handleArmInputChange = (index:number, text:string)=>{ const onlyNumbers = text.replace(/[^0-9]/g,''); setArmInputs(prev=>{ const next=[...prev]; next[index]=onlyNumbers; return next; }); if(onlyNumbers!==''){ const { lo, hi } = armBounds(index, armIs360[index]); const clampedValue = clamp(Number(onlyNumbers), lo, hi); setArmValues(prev=>{ const next=[...prev]; next[index]=clampedValue; return next; }); } };
   const handleArmInputSubmit = (index:number, text:string)=>{ const onlyNumbers = text.replace(/[^0-9]/g,''); const numValue = onlyNumbers===''?0:Number(onlyNumbers); handleArmChange(index, numValue); };
 
   const renderVerticalArmCard = (index:number)=>{ const value = armValues[index]; return (
@@ -354,7 +379,7 @@ function RobotArmTab({ disableScroll = false }: { disableScroll?: boolean }) {
     </View>
   ); };
 
-  const renderHorizontalArmCard = (index:number, height?:number)=>{ const value = armValues[index]; const color = ARM_COLORS[index]; const is360Servo = armIs360[index]; return (
+  const renderHorizontalArmCard = (index:number, height?:number)=>{ const value = armValues[index]; const color = ARM_COLORS[index]; const is360Servo = armIs360[index]; const { lo, hi } = armBounds(index, is360Servo); return (
     <View key={index} style={[styles.armCardHorizontal, { borderLeftColor: color }, height?{height}:{flex:1}]}> 
       <View style={styles.armHTitleBox}><Text style={[styles.armTitle,{color}]}>R{index}</Text></View>
       {is360Servo?(<>
@@ -363,7 +388,7 @@ function RobotArmTab({ disableScroll = false }: { disableScroll?: boolean }) {
         <HoldButton style={[styles.armButton, styles.armButtonHorizontal, { backgroundColor: color }]} activeOpacity={0.8} onPressIn={()=>handle360Rotation(index,'right')} onPressOut={()=>handle360RotationStop(index)}><Entypo name="arrow-right" size={18} color="#FFFFFF"/></HoldButton>
       </>):(<>
         <HoldButton style={[styles.armButton, styles.armButtonHorizontal, { backgroundColor: color }]} activeOpacity={0.8} onPressIn={()=>startArmHold(index,-1)} onPressOut={stopArmHold}><Entypo name="minus" size={18} color="#FFFFFF"/></HoldButton>
-        <View style={styles.armHSliderBox}><CustomSlider value={value} minimumValue={ARM_MIN} maximumValue={ARM_MAX} step={1} onValueChange={(val:number)=>handleArmChange(index,val)} trackThickness={7} thumbSize={20} trackColor="#D7E0EA" fillColor={color} thumbColor={color}/></View>
+        <View style={styles.armHSliderBox}><CustomSlider value={value} minimumValue={lo} maximumValue={hi} step={1} onValueChange={(val:number)=>handleArmChange(index,val)} trackThickness={7} thumbSize={20} trackColor="#D7E0EA" fillColor={color} thumbColor={color}/></View>
         <HoldButton style={[styles.armButton, styles.armButtonHorizontal, { backgroundColor: color }]} activeOpacity={0.8} onPressIn={()=>startArmHold(index,1)} onPressOut={stopArmHold}><Entypo name="plus" size={18} color="#FFFFFF"/></HoldButton>
       </>) }
       <View style={[styles.armInputBox, styles.armInputBoxHorizontal]}>

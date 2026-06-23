@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import {
   LayoutChangeEvent,
   StyleProp,
@@ -60,9 +60,14 @@ export default function CustomSlider({
 
   // Local displayed value to ensure visual updates during concurrent multi-touch.
   const [displayValue, setDisplayValue] = useState(value);
-  // Sync with prop value — forces a re-render of visual elements even if gestures are active.
-  useEffect(() => {
-    setDisplayValue(value);
+  const isGestureActiveRef = useRef(false);
+  // Dış değer yalnızca bu slider sürüklenmiyorken görsele aktarılır. Böylece başka
+  // bir ayarın değiştirdiği değer hemen görünür; gecikmiş parent güncellemeleri ise
+  // aktif sürükleme sırasında thumb'ı eski konuma geri çekip titretmez.
+  useLayoutEffect(() => {
+    if (!isGestureActiveRef.current) {
+      setDisplayValue(value);
+    }
   }, [value]);
 
   const onLayout = (e: LayoutChangeEvent) => {
@@ -114,6 +119,7 @@ export default function CustomSlider({
       .runOnJS(true)
       .minDistance(0)
       .onBegin((e) => {
+        isGestureActiveRef.current = true;
         updateFromCoord(propsRef.current.vertical ? e.y : e.x);
       })
       .onUpdate((e) => {
@@ -121,6 +127,7 @@ export default function CustomSlider({
       })
       .onEnd((e) => {
         // Ensure final value is committed to parent on gesture end
+        isGestureActiveRef.current = false;
         const p = propsRef.current;
         const coord = p.vertical ? e.y : e.x;
         const len = lengthRef.current;
@@ -136,11 +143,19 @@ export default function CustomSlider({
         setDisplayValue(clamped);
         lastSentRef.current = Date.now();
         p.onValueChange(clamped);
+      })
+      .onFinalize(() => {
+        isGestureActiveRef.current = false;
       }),
   ).current;
 
+  // Bu slider sürüklenirken akıcı yerel displayValue; aksi halde doğrudan prop
+  // value kullanılır. Böylece value ile min/max aynı anda değişince (ör. üstteki
+  // aralık değişip varsayılan açı orta noktaya çekildiğinde) bir kare gecikmeden
+  // doğan titreme olmaz.
+  const effectiveValue = isGestureActiveRef.current ? displayValue : value;
   const range = maximumValue - minimumValue;
-  const ratio = range > 0 ? (displayValue - minimumValue) / range : 0;
+  const ratio = range > 0 ? (effectiveValue - minimumValue) / range : 0;
   const clampedRatio = Math.max(0, Math.min(1, ratio));
 
   const crossSize = Math.max(trackThickness, thumbSize);

@@ -91,19 +91,47 @@ export type ZiplineAngles = {
   back: { open: number; close: number };
 };
 
+/** Robot kol varsayılan açısı 180° ve 360° modları için ayrı tutulur. */
+export type ArmDefaultAngle = { deg180: number; deg360: number };
+
+/** 180° serbest modunda kolun açı sınırı (varsayılan açı ve araç kontrolü bununla kısıtlanır). */
+export type ArmAngleLimit = { min: number; max: number };
+
+// ----------------------------------------------------------------------------
+// PWM çözünürlüğü (bit) -> değer aralığı. ESP32 LEDC gibi kanallarda duty
+// çözünürlüğü 8 bit olmak zorunda değil; res bit ise üst sınır 2^res - 1 olur
+// (8 bit -> 255, 10 bit -> 1023, 12 bit -> 4095 ...). Alt sınır her zaman 0.
+// res, taşma / mantıksız değerlere karşı PWM_RESOLUTION_MIN..MAX ile kıstırılır.
+// ----------------------------------------------------------------------------
+export const PWM_MIN_VALUE = 0;
+export const PWM_RESOLUTION_MIN = 1;
+export const PWM_RESOLUTION_MAX = 16;
+
+export const clampPwmResolution = (res: number): number =>
+  Math.max(PWM_RESOLUTION_MIN, Math.min(PWM_RESOLUTION_MAX, Math.floor(res || 0)));
+
+export const pwmMaxFromResolution = (res: number): number =>
+  2 ** clampPwmResolution(res) - 1;
+
 export type AppSettings = {
   sendValuesHeaders: SendValuesHeaders;
   allSendsValues: AllSendsValues;
   /** Araç hız kontrolü varsayılan modu: false = ortak, true = ayrı ayrı (sağ/sol). */
   motorControlSeparateDefault: boolean;
+  /** PWM kanal çözünürlüğü (bit) — her hız kontrolü için ayrı. Üst sınır = 2^res - 1 (8 bit -> 255). */
+  motorPwmResolutionDefault: number;
   motorSpeedDefault: number;
   motorSpeedStepDefault: number;
+  rightMotorPwmResolutionDefault: number;
   rightMotorSpeedDefault: number;
   rightMotorSpeedStepDefault: number;
+  leftMotorPwmResolutionDefault: number;
   leftMotorSpeedDefault: number;
   leftMotorSpeedStepDefault: number;
   armsAre360Default: boolean[];
-  armValuesDefault: number[];
+  armValuesDefault: ArmDefaultAngle[];
+  /** 180° modunda her kolun açı min/max sınırı (0–180). */
+  armAngleLimitsDefault: ArmAngleLimit[];
   armValuesStepDefault: number;
   ziplineAnglesDefault: ZiplineAngles;
 };
@@ -136,14 +164,32 @@ export const defaultSettings: AppSettings = {
     ziplines: true,
   },
   motorControlSeparateDefault: false,
+  motorPwmResolutionDefault: 8,
   motorSpeedDefault: 255,
   motorSpeedStepDefault: 5,
+  rightMotorPwmResolutionDefault: 8,
   rightMotorSpeedDefault: 255,
   rightMotorSpeedStepDefault: 5,
+  leftMotorPwmResolutionDefault: 8,
   leftMotorSpeedDefault: 255,
   leftMotorSpeedStepDefault: 5,
   armsAre360Default: [true, false, false, false, true, false],
-  armValuesDefault: [30, 90, 90, 90, 30, 90],
+  armValuesDefault: [
+    { deg180: 90, deg360: 30 },
+    { deg180: 90, deg360: 30 },
+    { deg180: 90, deg360: 30 },
+    { deg180: 90, deg360: 30 },
+    { deg180: 90, deg360: 30 },
+    { deg180: 90, deg360: 30 },
+  ],
+  armAngleLimitsDefault: [
+    { min: 0, max: 180 },
+    { min: 0, max: 180 },
+    { min: 0, max: 180 },
+    { min: 0, max: 180 },
+    { min: 0, max: 180 },
+    { min: 0, max: 180 },
+  ],
   armValuesStepDefault: 5,
   ziplineAnglesDefault: {
     front: { open: 90, close: 0 },
@@ -174,31 +220,56 @@ export const useSettingsStore = create<SettingsStore>()(
         sendValuesHeaders,
         allSendsValues,
         motorControlSeparateDefault,
+        motorPwmResolutionDefault,
         motorSpeedDefault,
         motorSpeedStepDefault,
+        rightMotorPwmResolutionDefault,
         rightMotorSpeedDefault,
         rightMotorSpeedStepDefault,
+        leftMotorPwmResolutionDefault,
         leftMotorSpeedDefault,
         leftMotorSpeedStepDefault,
         armsAre360Default,
         armValuesDefault,
+        armAngleLimitsDefault,
         armValuesStepDefault,
         ziplineAnglesDefault,
       }) => ({
         sendValuesHeaders,
         allSendsValues,
         motorControlSeparateDefault,
+        motorPwmResolutionDefault,
         motorSpeedDefault,
         motorSpeedStepDefault,
+        rightMotorPwmResolutionDefault,
         rightMotorSpeedDefault,
         rightMotorSpeedStepDefault,
+        leftMotorPwmResolutionDefault,
         leftMotorSpeedDefault,
         leftMotorSpeedStepDefault,
         armsAre360Default,
         armValuesDefault,
+        armAngleLimitsDefault,
         armValuesStepDefault,
         ziplineAnglesDefault,
       }),
+      version: 1,
+      // v0 -> v1: armValuesDefault eskiden number[] idi, artık { deg180, deg360 }[].
+      // Eski tekil değer kolun o anki moduna yazılır (360° -> deg360, 180° -> deg180).
+      migrate: (persisted: any) => {
+        if (
+          persisted &&
+          Array.isArray(persisted.armValuesDefault) &&
+          typeof persisted.armValuesDefault[0] === 'number'
+        ) {
+          persisted.armValuesDefault = persisted.armValuesDefault.map((n: number, i: number) =>
+            persisted.armsAre360Default?.[i]
+              ? { deg180: 90, deg360: n }
+              : { deg180: n, deg360: 30 },
+          );
+        }
+        return persisted;
+      },
       onRehydrateStorage: () => (state) => {
         state?.setHasHydrated(true);
       },

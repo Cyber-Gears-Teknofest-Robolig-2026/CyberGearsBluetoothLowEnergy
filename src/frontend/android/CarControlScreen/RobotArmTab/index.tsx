@@ -48,22 +48,40 @@ export default function RobotArmTab() {
   const allSendsValues = useSettingsStore((state) => state.allSendsValues);
   const armsAre360Default = useSettingsStore((state) => state.armsAre360Default);
   const ARM_DEFAULT_VALUES = useSettingsStore((state) => state.armValuesDefault);
+  const ARM_ANGLE_LIMITS = useSettingsStore((state) => state.armAngleLimitsDefault);
   const ARM_STEP = useSettingsStore((state) => state.armValuesStepDefault);
 
   const { height } = useWindowDimensions();
 
   const [robotScrollHeight, setRobotScrollHeight] = useState(0);
 
-  const [armValues, setArmValues] = useState<number[]>([...ARM_DEFAULT_VALUES]);
+  // Bir kolun değer aralığı: 360° modunda hız 0–90, 180° modunda kullanıcı ayarındaki
+  // min/max açı (sıralı, ters girilirse de bozulmaz).
+  const armBounds = (index: number, is360: boolean) =>
+    is360
+      ? { lo: 0, hi: 90 }
+      : {
+          lo: Math.min(ARM_ANGLE_LIMITS[index].min, ARM_ANGLE_LIMITS[index].max),
+          hi: Math.max(ARM_ANGLE_LIMITS[index].min, ARM_ANGLE_LIMITS[index].max),
+        };
+
+  // Her kolun başlangıç değeri, o kolun moduna (180°/360°) ait varsayılandan gelir
+  // ve 180° modunda açı sınırına kıstırılır.
+  const initialArmValues = ARM_DEFAULT_VALUES.map((v, i) => {
+    if (armsAre360Default[i]) return v.deg360;
+    const { lo, hi } = armBounds(i, false);
+    return clamp(v.deg180, lo, hi);
+  });
+
+  const [armValues, setArmValues] = useState<number[]>([...initialArmValues]);
   const [armIs360, setArmIs360] = useState<boolean[]>([...armsAre360Default]);
   // TextInput'lar için ayrı metin state'i: alan düzenlenirken boş bırakılabilsin.
-  const [armInputs, setArmInputs] = useState<string[]>(ARM_DEFAULT_VALUES.map(String));
+  const [armInputs, setArmInputs] = useState<string[]>(initialArmValues.map(String));
 
   const handleArmChange = async (index: number, rawValue: number | number[]) => {
     const value = getSliderValue(rawValue);
-    const min = 0;
-    const max = armIs360[index] ? 90 : 180;
-    const angleValue = clamp(value, min, max);
+    const { lo, hi } = armBounds(index, armIs360[index]);
+    const angleValue = clamp(value, lo, hi);
 
     const nextValues = [...armValues];
     nextValues[index] = angleValue;
@@ -168,8 +186,9 @@ export default function RobotArmTab() {
   };
 
   const resetArm = (index: number) => {
-    console.log(`Arm ${index + 1} reset to default:`, ARM_DEFAULT_VALUES[index]);
-    handleArmChange(index, ARM_DEFAULT_VALUES[index]);
+    const def = armIs360[index] ? ARM_DEFAULT_VALUES[index].deg360 : ARM_DEFAULT_VALUES[index].deg180;
+    console.log(`Arm ${index + 1} reset to default:`, def);
+    handleArmChange(index, def);
   };
 
   const incrementArm = (index: number) => {
@@ -219,9 +238,8 @@ export default function RobotArmTab() {
 
     // Sayı varsa slider'ı canlı oynat (boşsa dokunma, BT gönderme).
     if (onlyNumbers !== '') {
-      const min = 0;
-      const max = armIs360[index] ? 90 : 180;
-      const clampedValue = clamp(Number(onlyNumbers), min, max);
+      const { lo, hi } = armBounds(index, armIs360[index]);
+      const clampedValue = clamp(Number(onlyNumbers), lo, hi);
       setArmValues((prev) => {
         const next = [...prev];
         next[index] = clampedValue;
@@ -312,6 +330,7 @@ export default function RobotArmTab() {
     const value = armValues[index];
     const color = ARM_COLORS[index];
     const is360Servo = armIs360[index];
+    const { lo, hi } = armBounds(index, is360Servo);
 
     return (
       <View
@@ -415,8 +434,8 @@ export default function RobotArmTab() {
             <View style={styles.armHSliderBox}>
               <CustomSlider
                 value={value}
-                minimumValue={ARM_MIN}
-                maximumValue={ARM_MAX}
+                minimumValue={lo}
+                maximumValue={hi}
                 step={1}
                 onValueChange={(val: number) => handleArmChange(index, val)}
                 trackThickness={7}

@@ -14,12 +14,12 @@ import HoldButton from '../../CustomComponents/HoldButton';
 import ToggleSwitch from '../../CustomComponents/ToggleSwitch';
 import styles from './styles';
 import {
+  pwmMaxFromResolution,
   useBluetoothStore,
   useSettingsStore,
 } from '../../constants';
 
 const PWM_MIN = 0;
-const PWM_MAX = 255;
 
 const getSliderValue = (value: number | number[]) => {
   return Array.isArray(value) ? value[0] : value;
@@ -43,6 +43,11 @@ export default function RCCarTab() {
   const RIGHT_PWM_STEP = useSettingsStore((state) => state.rightMotorSpeedStepDefault);
   const LEFT_SPEED_DEFAULT = useSettingsStore((state) => state.leftMotorSpeedDefault);
   const LEFT_PWM_STEP = useSettingsStore((state) => state.leftMotorSpeedStepDefault);
+
+  // Her hız kontrolünün PWM üst sınırı kendi çözünürlüğünden türetilir: 2^res - 1 (8 bit -> 255).
+  const COMMON_PWM_MAX = pwmMaxFromResolution(useSettingsStore((state) => state.motorPwmResolutionDefault));
+  const RIGHT_PWM_MAX = pwmMaxFromResolution(useSettingsStore((state) => state.rightMotorPwmResolutionDefault));
+  const LEFT_PWM_MAX = pwmMaxFromResolution(useSettingsStore((state) => state.leftMotorPwmResolutionDefault));
 
   const [ziplineOpen, setZiplineOpen] = useState(false);
   const [vehicleScrollHeight, setVehicleScrollHeight] = useState(0);
@@ -122,15 +127,17 @@ export default function RCCarTab() {
     setValue: (n: number) => void,
     setInput: (s: string) => void,
     step: number,
+    max: number,
   ) => {
     const apply = (rawValue: number | number[]) => {
-      const pwmValue = clamp(getSliderValue(rawValue), PWM_MIN, PWM_MAX);
+      const pwmValue = clamp(getSliderValue(rawValue), PWM_MIN, max);
       setValue(pwmValue);
       setInput(pwmValue.toString());
     };
     return {
       value,
       input,
+      max,
       apply,
       increment: () => apply(value + step),
       decrement: () => apply(value - step),
@@ -139,55 +146,60 @@ export default function RCCarTab() {
         setInput(onlyNumbers);
         if (onlyNumbers === '') return;
         const numValue = Number(onlyNumbers);
-        if (!Number.isNaN(numValue)) setValue(clamp(numValue, PWM_MIN, PWM_MAX));
+        if (!Number.isNaN(numValue)) setValue(clamp(numValue, PWM_MIN, max));
       },
       normalize: () => apply(input === '' ? value : Number(input)),
     };
   };
 
-  const commonSpeed = makeSpeedControl(speed, speedInput, setSpeed, setSpeedInput, PWM_STEP);
-  const rightSpeedCtrl = makeSpeedControl(rightSpeed, rightSpeedInput, setRightSpeed, setRightSpeedInput, RIGHT_PWM_STEP);
-  const leftSpeedCtrl = makeSpeedControl(leftSpeed, leftSpeedInput, setLeftSpeed, setLeftSpeedInput, LEFT_PWM_STEP);
+  const commonSpeed = makeSpeedControl(speed, speedInput, setSpeed, setSpeedInput, PWM_STEP, COMMON_PWM_MAX);
+  const rightSpeedCtrl = makeSpeedControl(rightSpeed, rightSpeedInput, setRightSpeed, setRightSpeedInput, RIGHT_PWM_STEP, RIGHT_PWM_MAX);
+  const leftSpeedCtrl = makeSpeedControl(leftSpeed, leftSpeedInput, setLeftSpeed, setLeftSpeedInput, LEFT_PWM_STEP, LEFT_PWM_MAX);
 
-  const renderSpeedRow = (ctrl: ReturnType<typeof makeSpeedControl>, fillColor: string) => (
-    <View style={styles.speedControlRow}>
-      <TouchableOpacity style={[styles.roundControlButton, { backgroundColor: fillColor }]} onPress={ctrl.decrement}>
-        <Entypo name="minus" size={20} color="#FFFFFF" />
-      </TouchableOpacity>
+  const renderSpeedRow = (ctrl: ReturnType<typeof makeSpeedControl>, fillColor: string) => {
+    const inputMaxLen = String(ctrl.max).length;
+    // Giriş kutusu 3 basamağa göre ayarlı; 4+ basamakta sıkışmasın diye genişlet.
+    const inputBoxWidth = 74 + Math.max(0, inputMaxLen - 3) * 12;
+    return (
+      <View style={styles.speedControlRow}>
+        <TouchableOpacity style={[styles.roundControlButton, { backgroundColor: fillColor }]} onPress={ctrl.decrement}>
+          <Entypo name="minus" size={20} color="#FFFFFF" />
+        </TouchableOpacity>
 
-      <View style={styles.speedSliderBox}>
-        <CustomSlider
-          value={ctrl.value}
-          minimumValue={PWM_MIN}
-          maximumValue={PWM_MAX}
-          step={1}
-          onValueChange={ctrl.apply}
-          trackThickness={8}
-          thumbSize={22}
-          trackColor="#D7E0EA"
-          fillColor={fillColor}
-          thumbColor={fillColor}
-        />
+        <View style={styles.speedSliderBox}>
+          <CustomSlider
+            value={ctrl.value}
+            minimumValue={PWM_MIN}
+            maximumValue={ctrl.max}
+            step={1}
+            onValueChange={ctrl.apply}
+            trackThickness={8}
+            thumbSize={22}
+            trackColor="#D7E0EA"
+            fillColor={fillColor}
+            thumbColor={fillColor}
+          />
+        </View>
+
+        <TouchableOpacity style={[styles.roundControlButton, { backgroundColor: fillColor }]} onPress={ctrl.increment}>
+          <Entypo name="plus" size={20} color="#FFFFFF" />
+        </TouchableOpacity>
+
+        <View style={[styles.speedInputBox, { width: inputBoxWidth }]}>
+          <TextInput
+            style={styles.speedInput}
+            value={ctrl.input}
+            onChangeText={ctrl.onInput}
+            onBlur={ctrl.normalize}
+            keyboardType="numeric"
+            maxLength={inputMaxLen}
+            selectTextOnFocus
+          />
+          <Text style={styles.speedInputUnit}>PWM</Text>
+        </View>
       </View>
-
-      <TouchableOpacity style={[styles.roundControlButton, { backgroundColor: fillColor }]} onPress={ctrl.increment}>
-        <Entypo name="plus" size={20} color="#FFFFFF" />
-      </TouchableOpacity>
-
-      <View style={styles.speedInputBox}>
-        <TextInput
-          style={styles.speedInput}
-          value={ctrl.input}
-          onChangeText={ctrl.onInput}
-          onBlur={ctrl.normalize}
-          keyboardType="numeric"
-          maxLength={3}
-          selectTextOnFocus
-        />
-        <Text style={styles.speedInputUnit}>PWM</Text>
-      </View>
-    </View>
-  );
+    );
+  };
 
   return (
     <ScrollView

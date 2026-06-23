@@ -11,13 +11,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useNavigation } from '@react-navigation/native';
 import CustomSlider from '../CustomComponents/CustomSlider';
+import RangeSlider from '../CustomComponents/RangeSlider';
 import ToggleSwitch from '../CustomComponents/ToggleSwitch';
 import styles from './styles';
 import {
   AppNavigationProp,
   AppSettings,
   SendValuesHeaders,
+  clampPwmResolution,
   defaultSettings,
+  pwmMaxFromResolution,
   useSettingsStore,
 } from '../constants';
 
@@ -26,20 +29,29 @@ type DraftSettings = {
   sendValuesHeaders: SendValuesHeaders;
   allSendsValues: AppSettings['allSendsValues'];
   motorControlSeparateDefault: boolean;
+  motorPwmResolutionDefault: string;
   motorSpeedDefault: string;
   motorSpeedStepDefault: string;
+  rightMotorPwmResolutionDefault: string;
   rightMotorSpeedDefault: string;
   rightMotorSpeedStepDefault: string;
+  leftMotorPwmResolutionDefault: string;
   leftMotorSpeedDefault: string;
   leftMotorSpeedStepDefault: string;
   armsAre360Default: boolean[];
-  armValuesDefault: string[];
+  armValuesDefault: { deg180: string; deg360: string }[];
+  armAngleLimitsDefault: { min: string; max: string }[];
   armValuesStepDefault: string;
   ziplineAnglesDefault: {
     front: { open: string; close: string };
     back: { open: string; close: string };
   };
 };
+
+// Motor hız bölümlerinin (ortak / sağ / sol) draft alan anahtarları.
+type ResKey = 'motorPwmResolutionDefault' | 'rightMotorPwmResolutionDefault' | 'leftMotorPwmResolutionDefault';
+type SpeedKey = 'motorSpeedDefault' | 'rightMotorSpeedDefault' | 'leftMotorSpeedDefault';
+type StepKey = 'motorSpeedStepDefault' | 'rightMotorSpeedStepDefault' | 'leftMotorSpeedStepDefault';
 
 const toDraft = (s: AppSettings): DraftSettings => ({
   sendValuesHeaders: {
@@ -49,14 +61,18 @@ const toDraft = (s: AppSettings): DraftSettings => ({
   },
   allSendsValues: { ...s.allSendsValues },
   motorControlSeparateDefault: s.motorControlSeparateDefault,
+  motorPwmResolutionDefault: String(s.motorPwmResolutionDefault),
   motorSpeedDefault: String(s.motorSpeedDefault),
   motorSpeedStepDefault: String(s.motorSpeedStepDefault),
+  rightMotorPwmResolutionDefault: String(s.rightMotorPwmResolutionDefault),
   rightMotorSpeedDefault: String(s.rightMotorSpeedDefault),
   rightMotorSpeedStepDefault: String(s.rightMotorSpeedStepDefault),
+  leftMotorPwmResolutionDefault: String(s.leftMotorPwmResolutionDefault),
   leftMotorSpeedDefault: String(s.leftMotorSpeedDefault),
   leftMotorSpeedStepDefault: String(s.leftMotorSpeedStepDefault),
   armsAre360Default: [...s.armsAre360Default],
-  armValuesDefault: s.armValuesDefault.map(String),
+  armValuesDefault: s.armValuesDefault.map((v) => ({ deg180: String(v.deg180), deg360: String(v.deg360) })),
+  armAngleLimitsDefault: s.armAngleLimitsDefault.map((l) => ({ min: String(l.min), max: String(l.max) })),
   armValuesStepDefault: String(s.armValuesStepDefault),
   ziplineAnglesDefault: {
     front: {
@@ -81,6 +97,16 @@ const clamp = (value: number, min: number, max: number): number =>
 // Robot kol kartlarındaki renklerle aynı (araç kontrol ekranıyla uyum için).
 const ARM_COLORS = ['#6366F1', '#0EA5E9', '#14B8A6', '#22C55E', '#F59E0B', '#EF4444'];
 
+// Aralık slider tutamakları: kolun renginin daha koyu tonu — aynı renk ailesinden
+// ama dolu kısımdan belirgin şekilde farklı hissettirir.
+const darkenHex = (hex: string, factor = 0.6): string => {
+  const m = hex.replace('#', '');
+  const ch = (i: number) =>
+    Math.round(parseInt(m.slice(i, i + 2), 16) * factor).toString(16).padStart(2, '0');
+  return `#${ch(0)}${ch(2)}${ch(4)}`;
+};
+const ARM_THUMB_COLORS = ARM_COLORS.map((c) => darkenHex(c));
+
 // Zipline açık/kapalı slider renkleri (ön ve arka aynı renkleri paylaşır).
 // ARM_COLORS paletiyle bilerek çakışmayan renkler seçildi.
 const ZIPLINE_OPEN_COLOR = '#DB2777';
@@ -90,14 +116,29 @@ const fromDraft = (d: DraftSettings): AppSettings => ({
   sendValuesHeaders: d.sendValuesHeaders,
   allSendsValues: d.allSendsValues,
   motorControlSeparateDefault: d.motorControlSeparateDefault,
+  motorPwmResolutionDefault: clampPwmResolution(num(d.motorPwmResolutionDefault)),
   motorSpeedDefault: num(d.motorSpeedDefault),
   motorSpeedStepDefault: num(d.motorSpeedStepDefault),
+  rightMotorPwmResolutionDefault: clampPwmResolution(num(d.rightMotorPwmResolutionDefault)),
   rightMotorSpeedDefault: num(d.rightMotorSpeedDefault),
   rightMotorSpeedStepDefault: num(d.rightMotorSpeedStepDefault),
+  leftMotorPwmResolutionDefault: clampPwmResolution(num(d.leftMotorPwmResolutionDefault)),
   leftMotorSpeedDefault: num(d.leftMotorSpeedDefault),
   leftMotorSpeedStepDefault: num(d.leftMotorSpeedStepDefault),
   armsAre360Default: d.armsAre360Default,
-  armValuesDefault: d.armValuesDefault.map(num),
+  // Varsayılan açıyı (deg180) o kolun min/max sınırına kıstırarak kaydet.
+  armValuesDefault: d.armValuesDefault.map((v, i) => {
+    const lo = Math.min(num(d.armAngleLimitsDefault[i].min), num(d.armAngleLimitsDefault[i].max));
+    const hi = Math.max(num(d.armAngleLimitsDefault[i].min), num(d.armAngleLimitsDefault[i].max));
+    return { deg180: clamp(num(v.deg180), lo, hi), deg360: num(v.deg360) };
+  }),
+  armAngleLimitsDefault: d.armAngleLimitsDefault.map((l) => {
+    let mn = clamp(num(l.min), 0, 180);
+    let mx = clamp(num(l.max), 0, 180);
+    if (mn > mx) { const t = mn; mn = mx; mx = t; }
+    if (mn === mx) { if (mx < 180) mx = mn + 1; else mn = mx - 1; }
+    return { min: mn, max: mx };
+  }),
   armValuesStepDefault: num(d.armValuesStepDefault),
   ziplineAnglesDefault: {
     front: { open: num(d.ziplineAnglesDefault.front.open), close: num(d.ziplineAnglesDefault.front.close) },
@@ -318,11 +359,91 @@ export default function SettingsScreen() {
       armsAre360Default: d.armsAre360Default.map((v, i) => (i === index ? value : v)),
     }));
 
+  // Slider, kolun o anki moduna (180°/360°) ait varsayılanı düzenler; diğer mod korunur.
+  // 180° modunda slider izi 0–180 sabittir; değer kolun [min, max] aralığına kıstırılır.
   const setArmDefault = (index: number, value: string) =>
-    setDraft((d) => ({
-      ...d,
-      armValuesDefault: d.armValuesDefault.map((v, i) => (i === index ? value : v)),
-    }));
+    setDraft((d) => {
+      const is360 = d.armsAre360Default[index];
+      let next = value;
+      if (!is360 && value !== '') {
+        const lo = Math.min(num(d.armAngleLimitsDefault[index].min), num(d.armAngleLimitsDefault[index].max));
+        const hi = Math.max(num(d.armAngleLimitsDefault[index].min), num(d.armAngleLimitsDefault[index].max));
+        next = String(clamp(num(value), lo, hi));
+      }
+      const key = is360 ? 'deg360' : 'deg180';
+      return {
+        ...d,
+        armValuesDefault: d.armValuesDefault.map((v, i) => (i === index ? { ...v, [key]: next } : v)),
+      };
+    });
+
+  // 180° modunda kolun açı aralığını (iki tutamaklı slider) düzenler ve varsayılan
+  // açıyı (deg180) otomatik olarak yeni aralığın tam sayı orta noktasına ayarlar.
+  // RangeSlider min < max'ı garanti eder (minGap).
+  const setArmAngleRange = (index: number, min: number, max: number) =>
+    setDraft((d) => {
+      const lo = Math.min(min, max);
+      const hi = Math.max(min, max);
+      const midpoint = Math.round((lo + hi) / 2);
+      return {
+        ...d,
+        armAngleLimitsDefault: d.armAngleLimitsDefault.map((l, i) =>
+          i === index ? { min: String(lo), max: String(hi) } : l,
+        ),
+        armValuesDefault: d.armValuesDefault.map((v, i) =>
+          i === index ? { ...v, deg180: String(midpoint) } : v,
+        ),
+      };
+    });
+
+  // Aralık text input'ları: yazarken serbest (boş bırakılabilir). Yazarken varsayılan
+  // açı slider'ı + text input'u da canlı güncellenir (güncel aralığın orta noktasına
+  // çekilir). Tam normalize/kıstırma (0–180, min<max) blur'da yapılır.
+  const setArmLimitText = (index: number, edge: 'min' | 'max', value: string) =>
+    setDraft((d) => {
+      const cleaned = value.replace(/[^0-9]/g, '');
+      const limits = d.armAngleLimitsDefault.map((l, i) =>
+        i === index ? { ...l, [edge]: cleaned } : l,
+      );
+      const lo = Math.min(num(limits[index].min), num(limits[index].max));
+      const hi = Math.max(num(limits[index].min), num(limits[index].max));
+      const midpoint = Math.round((lo + hi) / 2);
+      return {
+        ...d,
+        armAngleLimitsDefault: limits,
+        armValuesDefault: d.armValuesDefault.map((v, i) =>
+          i === index ? { ...v, deg180: String(midpoint) } : v,
+        ),
+      };
+    });
+
+  // Text input'tan çıkınca normalize: 0–180'e kıstır, min < max güvencesi (düzenlenen
+  // alanı diğerine göre), varsayılan açıyı yeni aralığın orta noktasına çek.
+  const normalizeArmLimit = (index: number, edge: 'min' | 'max') =>
+    setDraft((d) => {
+      const lim = d.armAngleLimitsDefault[index];
+      let mn = clamp(num(lim.min), 0, 180);
+      let mx = clamp(num(lim.max), 0, 180);
+      if (mn >= mx) {
+        if (edge === 'min') {
+          mn = mx - 1;
+          if (mn < 0) { mn = 0; mx = 1; }
+        } else {
+          mx = mn + 1;
+          if (mx > 180) { mx = 180; mn = 179; }
+        }
+      }
+      const midpoint = Math.round((mn + mx) / 2);
+      return {
+        ...d,
+        armAngleLimitsDefault: d.armAngleLimitsDefault.map((l, i) =>
+          i === index ? { min: String(mn), max: String(mx) } : l,
+        ),
+        armValuesDefault: d.armValuesDefault.map((v, i) =>
+          i === index ? { ...v, deg180: String(midpoint) } : v,
+        ),
+      };
+    });
 
   const setZiplineAngle = (side: 'front' | 'back', edge: 'open' | 'close', value: string) =>
     setDraft((d) => ({
@@ -332,6 +453,59 @@ export default function SettingsScreen() {
         [side]: { ...d.ziplineAnglesDefault[side], [edge]: value },
       },
     }));
+
+  // Her hız kontrolünün kendi PWM çözünürlüğü var. Çözünürlük değişince üst sınır
+  // 2^res-1 olur ("Aralık" otomatik ayarlanır) ve "her zaman default'ta max" kuralı
+  // gereği o kontrolün hız varsayılanı otomatik yeni max'a çekilir (sonra düşürülebilir).
+  const makeResolutionSetter =
+    (resKey: ResKey, speedKey: SpeedKey) => (text: string) => {
+      const cleaned = text.replace(/[^0-9]/g, '');
+      setDraft((d) => {
+        const next: DraftSettings = { ...d, [resKey]: cleaned };
+        if (cleaned !== '') next[speedKey] = String(pwmMaxFromResolution(num(cleaned)));
+        return next;
+      });
+    };
+
+  // Tek bir motor hız bölümü: çözünürlük girişi + aralık bilgisi + hız slider'ı + adım.
+  // Çözünürlükten türeyen max'a göre slider sınırı ve giriş basamağı otomatik ayarlanır.
+  const renderMotorSection = (opts: {
+    title: string;
+    color: string;
+    resKey: ResKey;
+    speedKey: SpeedKey;
+    stepKey: StepKey;
+  }) => {
+    const max = pwmMaxFromResolution(num(draft[opts.resKey]));
+    return (
+      <>
+        <Text style={styles.subGroupTitle}>{opts.title}</Text>
+        <NumberRow
+          label="PWM Çözünürlüğü (bit)"
+          value={draft[opts.resKey]}
+          onChangeText={makeResolutionSetter(opts.resKey, opts.speedKey)}
+          maxLength={2}
+        />
+        <Text style={{ fontSize: 12, color: '#94A3B8', fontWeight: '600', marginTop: -2, marginBottom: 6 }}>
+          PWM aralığı: 0 – {max}
+        </Text>
+        <SliderField
+          label="Varsayılan Hız"
+          value={draft[opts.speedKey]}
+          min={0}
+          max={max}
+          maxLength={String(max).length}
+          color={opts.color}
+          onChange={(t) => setDraft((d) => ({ ...d, [opts.speedKey]: t }))}
+        />
+        <NumberRow
+          label="Hız Adımı"
+          value={draft[opts.stepKey]}
+          onChangeText={(t) => setDraft((d) => ({ ...d, [opts.stepKey]: t }))}
+        />
+      </>
+    );
+  };
 
   const handleSave = () => {
     setSettings(fromDraft(draft));
@@ -357,14 +531,18 @@ export default function SettingsScreen() {
       sendValuesHeaders: s.sendValuesHeaders,
       allSendsValues: s.allSendsValues,
       motorControlSeparateDefault: s.motorControlSeparateDefault,
+      motorPwmResolutionDefault: s.motorPwmResolutionDefault,
       motorSpeedDefault: s.motorSpeedDefault,
       motorSpeedStepDefault: s.motorSpeedStepDefault,
+      rightMotorPwmResolutionDefault: s.rightMotorPwmResolutionDefault,
       rightMotorSpeedDefault: s.rightMotorSpeedDefault,
       rightMotorSpeedStepDefault: s.rightMotorSpeedStepDefault,
+      leftMotorPwmResolutionDefault: s.leftMotorPwmResolutionDefault,
       leftMotorSpeedDefault: s.leftMotorSpeedDefault,
       leftMotorSpeedStepDefault: s.leftMotorSpeedStepDefault,
       armsAre360Default: s.armsAre360Default,
       armValuesDefault: s.armValuesDefault,
+      armAngleLimitsDefault: s.armAngleLimitsDefault,
       armValuesStepDefault: s.armValuesStepDefault,
       ziplineAnglesDefault: s.ziplineAnglesDefault,
     };
@@ -461,61 +639,83 @@ export default function SettingsScreen() {
           />
 
           <View style={styles.divider} />
-          <Text style={styles.subGroupTitle}>Ortak</Text>
-          <SliderField
-            label="Varsayılan Hız"
-            value={draft.motorSpeedDefault}
-            min={0}
-            max={255}
-            color="#0A84FF"
-            onChange={(t) => setDraft((d) => ({ ...d, motorSpeedDefault: t }))}
-          />
-          <NumberRow label="Hız Adımı" value={draft.motorSpeedStepDefault} onChangeText={(t) => setDraft((d) => ({ ...d, motorSpeedStepDefault: t }))} />
+          {renderMotorSection({ title: 'Ortak', color: '#0A84FF', resKey: 'motorPwmResolutionDefault', speedKey: 'motorSpeedDefault', stepKey: 'motorSpeedStepDefault' })}
 
           <View style={styles.divider} />
-          <Text style={styles.subGroupTitle}>Sağ Motor</Text>
-          <SliderField
-            label="Varsayılan Hız"
-            value={draft.rightMotorSpeedDefault}
-            min={0}
-            max={255}
-            color="#F59E0B"
-            onChange={(t) => setDraft((d) => ({ ...d, rightMotorSpeedDefault: t }))}
-          />
-          <NumberRow label="Hız Adımı" value={draft.rightMotorSpeedStepDefault} onChangeText={(t) => setDraft((d) => ({ ...d, rightMotorSpeedStepDefault: t }))} />
+          {renderMotorSection({ title: 'Sağ Motor', color: '#F59E0B', resKey: 'rightMotorPwmResolutionDefault', speedKey: 'rightMotorSpeedDefault', stepKey: 'rightMotorSpeedStepDefault' })}
 
           <View style={styles.divider} />
-          <Text style={styles.subGroupTitle}>Sol Motor</Text>
-          <SliderField
-            label="Varsayılan Hız"
-            value={draft.leftMotorSpeedDefault}
-            min={0}
-            max={255}
-            color="#22C55E"
-            onChange={(t) => setDraft((d) => ({ ...d, leftMotorSpeedDefault: t }))}
-          />
-          <NumberRow label="Hız Adımı" value={draft.leftMotorSpeedStepDefault} onChangeText={(t) => setDraft((d) => ({ ...d, leftMotorSpeedStepDefault: t }))} />
+          {renderMotorSection({ title: 'Sol Motor', color: '#22C55E', resKey: 'leftMotorPwmResolutionDefault', speedKey: 'leftMotorSpeedDefault', stepKey: 'leftMotorSpeedStepDefault' })}
         </Card>
 
         <Card title="Robot Kol" icon="robot-industrial" iconColor="#B45309" iconBg="#FEF3C7">
-          <Text style={styles.subGroupTitle}>360° Servo mu?</Text>
-          {draft.armsAre360Default.map((is360, i) => (
-            <SwitchRow key={`a360-${i}`} label={`Kol ${i}`} value={is360} onValueChange={(v) => setArm360(i, v)} />
-          ))}
-
-          <View style={styles.divider} />
-          <Text style={styles.subGroupTitle}>Varsayılan Açılar</Text>
-          {draft.armValuesDefault.map((val, i) => (
-            <SliderField
-              key={`adef-${i}`}
-              label={draft.armsAre360Default[i] ? `Kol ${i} (360°)` : `Kol ${i}`}
-              value={val}
-              min={0}
-              max={draft.armsAre360Default[i] ? 90 : 180}
-              color={ARM_COLORS[i]}
-              onChange={(t) => setArmDefault(i, t)}
-            />
-          ))}
+          {draft.armValuesDefault.map((val, i) => {
+            const is360 = draft.armsAre360Default[i];
+            const lim = draft.armAngleLimitsDefault[i];
+            const lo = Math.min(num(lim.min), num(lim.max));
+            const hi = Math.max(num(lim.min), num(lim.max));
+            return (
+              <View key={`arm-${i}`}>
+                {i > 0 && <View style={styles.divider} />}
+                <Text style={styles.subGroupTitle}>{`Kol ${i}`}</Text>
+                <SwitchRow
+                  label="360° Servo"
+                  value={is360}
+                  onValueChange={(v) => setArm360(i, v)}
+                />
+                {!is360 && (
+                  <View style={styles.sliderField}>
+                    <View style={styles.sliderTopRow}>
+                      <Text style={styles.rowLabel}>Açı Aralığı</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <TextInput
+                          style={[styles.numberInput, { width: 58 }]}
+                          value={lim.min}
+                          onChangeText={(t) => setArmLimitText(i, 'min', t)}
+                          onBlur={() => normalizeArmLimit(i, 'min')}
+                          keyboardType="numeric"
+                          maxLength={3}
+                          selectTextOnFocus
+                        />
+                        <Text style={{ fontSize: 14, fontWeight: '800', color: '#94A3B8' }}>–</Text>
+                        <TextInput
+                          style={[styles.numberInput, { width: 58 }]}
+                          value={lim.max}
+                          onChangeText={(t) => setArmLimitText(i, 'max', t)}
+                          onBlur={() => normalizeArmLimit(i, 'max')}
+                          keyboardType="numeric"
+                          maxLength={3}
+                          selectTextOnFocus
+                        />
+                      </View>
+                    </View>
+                    <RangeSlider
+                      minValue={lo}
+                      maxValue={hi}
+                      minimumValue={0}
+                      maximumValue={180}
+                      step={1}
+                      minGap={1}
+                      trackThickness={7}
+                      thumbSize={20}
+                      trackColor="#E2E8F0"
+                      fillColor={ARM_COLORS[i]}
+                      thumbColor={ARM_THUMB_COLORS[i]}
+                      onChange={(mn, mx) => setArmAngleRange(i, mn, mx)}
+                    />
+                  </View>
+                )}
+                <SliderField
+                  label="Varsayılan Açı"
+                  value={is360 ? val.deg360 : val.deg180}
+                  min={is360 ? 0 : lo}
+                  max={is360 ? 90 : hi}
+                  color={ARM_COLORS[i]}
+                  onChange={(t) => setArmDefault(i, t)}
+                />
+              </View>
+            );
+          })}
 
           <View style={styles.divider} />
           <NumberRow label="Açı Adımı" value={draft.armValuesStepDefault} onChangeText={(t) => setDraft((d) => ({ ...d, armValuesStepDefault: t }))} />
